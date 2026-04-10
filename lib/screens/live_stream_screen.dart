@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import '../config.dart'; // RTSP 주소를 가져오기 위한 config
 
 class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({super.key});
@@ -12,50 +13,49 @@ class LiveStreamScreen extends StatefulWidget {
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  late VlcPlayerController _videoPlayerController;
   
-  //녹화 상태를 추적하는 변수
+  // 💡 수정 1: 웹 환경을 대비해 컨트롤러를 nullable(?)로 변경
+  VlcPlayerController? _videoPlayerController;
+  
   bool _isRecording = false;
-
   late String streamUrl;
   
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) {
-      streamUrl = 'rtsp://localhost:8554/camera1';
-    } else if (Platform.isAndroid) {
-      streamUrl = 'rtsp://10.0.2.2:8554/camera1';
-    } else {
-      streamUrl = 'rtsp://localhost:8554/camera1';
-    }
-    // LIVE 깜빡임 효과를 위한 애니메이션 컨트롤러
+    
+    // config.dart에 추가한 rtspUrl 사용
+    streamUrl = '${AppConfig.rtspUrl}/camera1';
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
 
-    // VLC 플레이어 컨트롤러 초기화 (RTSP 네트워크 스트림 연결)
-    _videoPlayerController = VlcPlayerController.network(
-      streamUrl,
-      hwAcc: HwAcc.full, // 하드웨어 가속 사용 (성능 최적화)
-      autoPlay: true,
-      options: VlcPlayerOptions(
-        advanced: VlcAdvancedOptions([
-          VlcAdvancedOptions.networkCaching(150), // 지연 시간(Latency) 줄이기
-        ]),
-      ),
-    );
+    // 💡 수정 2: 웹이 아닐 때(안드로이드/iOS)만 VLC 플레이어 초기화
+    if (!kIsWeb) {
+      _videoPlayerController = VlcPlayerController.network(
+        streamUrl,
+        // 💡 수정 3: 에뮬레이터 프리징 방지를 위해 하드웨어 가속 비활성화
+        hwAcc: HwAcc.disabled, 
+        autoPlay: true,
+        options: VlcPlayerOptions(
+          advanced: VlcAdvancedOptions([
+            VlcAdvancedOptions.networkCaching(300), // 연결 안정성을 위해 캐싱 시간 약간 증가
+          ]),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _videoPlayerController.dispose(); 
+    // 💡 수정 4: 컨트롤러가 초기화되었을 때만 안전하게 해제
+    _videoPlayerController?.dispose(); 
     super.dispose();
   }
 
-  // 📸 1. 화면 캡처(Snapshot) 모의 기능
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -71,7 +71,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // 🎥 2. 영상 녹화 모의 기능
   void _toggleRecording() {
     setState(() {
       _isRecording = !_isRecording;
@@ -128,8 +127,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                 FadeTransition(
                   opacity: _animationController,
                   child: Container(
-                    width: 8,
-                    height: 8,
+                    width: 8, height: 8,
                     decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                   ),
                 ),
@@ -161,20 +159,39 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        // 💡 수정 2: Image.network를 지우고 VlcPlayer를 연결했습니다.
-                        child: VlcPlayer(
-                          controller: _videoPlayerController,
-                          aspectRatio: 16 / 9, // CCTV 기본 비율
-                          placeholder: const Center(
-                            child: CircularProgressIndicator(color: Colors.blueAccent),
-                          ),
-                        ),
+                        // 💡 수정 5: 웹 환경일 때와 모바일일 때 화면을 다르게 보여줌
+                        child: kIsWeb 
+                            ? const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.videocam_off, color: Colors.grey, size: 48),
+                                    SizedBox(height: 16),
+                                    Text('웹 브라우저에서는 영상을 지원하지 않습니다.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    SizedBox(height: 8),
+                                    Text('안드로이드 에뮬레이터나 실기기를 이용해주세요.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                  ],
+                                ),
+                              )
+                            : VlcPlayer(
+                                controller: _videoPlayerController!,
+                                aspectRatio: 16 / 9,
+                                placeholder: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      CircularProgressIndicator(color: Colors.blueAccent),
+                                      SizedBox(height: 16),
+                                      Text('카메라 신호 대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
                     if (_isRecording)
                       Positioned(
-                        top: 16,
-                        right: 16,
+                        top: 16, right: 16,
                         child: FadeTransition(
                           opacity: _animationController,
                           child: Container(
@@ -221,7 +238,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                             const Text('상태: ', style: TextStyle(color: Colors.grey, fontSize: 12)),
                             Icon(Icons.network_wifi, color: Colors.green[400], size: 18),
                             const SizedBox(width: 4),
-                            Text('최상', style: TextStyle(color: Colors.green[400], fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text('연결 대기', style: TextStyle(color: Colors.green[400], fontSize: 12, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ],
