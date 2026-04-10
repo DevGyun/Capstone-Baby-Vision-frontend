@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({super.key});
@@ -9,10 +10,13 @@ class LiveStreamScreen extends StatefulWidget {
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  bool _isRecording = false; // 영상 녹화 상태 관리
+  late VlcPlayerController _videoPlayerController;
+  
+  // 💡 수정 1: 녹화 상태를 추적하는 변수 추가
+  bool _isRecording = false;
 
-  // 실제 스트리밍 서버 주소 (웹의 VITE_API_BASE_URL 역할)
-  final String streamUrl = 'https://새로-발급받은-ngrok-주소.ngrok-free.dev';
+  // 💡 [중요] 실제 테스트 시 ngrok tcp 주소로 변경하세요.
+  final String streamUrl = 'rtsp://localhost:8554/camera1';
 
   @override
   void initState() {
@@ -22,16 +26,29 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
+
+    // VLC 플레이어 컨트롤러 초기화 (RTSP 네트워크 스트림 연결)
+    _videoPlayerController = VlcPlayerController.network(
+      streamUrl,
+      hwAcc: HwAcc.full, // 하드웨어 가속 사용 (성능 최적화)
+      autoPlay: true,
+      options: VlcPlayerOptions(
+        advanced: VlcAdvancedOptions([
+          VlcAdvancedOptions.networkCaching(150), // 지연 시간(Latency) 줄이기
+        ]),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    // 💡 수정 3: 화면을 벗어날 때 비디오 메모리도 반드시 해제해야 합니다.
+    _videoPlayerController.dispose(); 
     super.dispose();
   }
 
   // 📸 1. 화면 캡처(Snapshot) 모의 기능
-  // 실제 구현 시 image_gallery_saver, path_provider 패키지 활용
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -69,8 +86,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // 📺 3. PIP (Picture-in-Picture) 모드 모의 기능
-  // 실제 구현 시 simple_pip_mode 또는 floating 패키지 활용 필요
+  // 📺 3. PIP 모드 모의 기능
   void _enterPIPMode() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -83,13 +99,12 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Tailwind slate-900
+      backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A).withOpacity(0.8),
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('실시간 CCTV 모니터링', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          // PIP 버튼 추가
           IconButton(
             icon: const Icon(Icons.picture_in_picture_alt),
             tooltip: '백그라운드에서 보기 (PIP)',
@@ -133,7 +148,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(16),
-                        // 녹화 중일 때 빨간색 테두리로 강조
                         border: Border.all(
                           color: _isRecording ? Colors.redAccent : Colors.grey[800]!,
                           width: _isRecording ? 2 : 1
@@ -141,17 +155,16 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        // 향후 RTSP나 특수 포맷인 경우 flutter_vlc_player 패키지로 교체
-                        child: Image.network(
-                          streamUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(child: Text('스트리밍을 연결할 수 없습니다.', style: TextStyle(color: Colors.white)));
-                          },
+                        // 💡 수정 2: Image.network를 지우고 VlcPlayer를 연결했습니다.
+                        child: VlcPlayer(
+                          controller: _videoPlayerController,
+                          aspectRatio: 16 / 9, // CCTV 기본 비율
+                          placeholder: const Center(
+                            child: CircularProgressIndicator(color: Colors.blueAccent),
+                          ),
                         ),
                       ),
                     ),
-                    // 녹화 중 표시 인디케이터 (우측 상단)
                     if (_isRecording)
                       Positioned(
                         top: 16,
@@ -179,16 +192,14 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
               ),
               const SizedBox(height: 16),
               
-              // 하단 컨트롤러 안내 영역
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B), // slate-800
+                  color: const Color(0xFF1E293B),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   children: [
-                    // 상단: 카메라 정보 및 세분화된 네트워크 상태
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -199,7 +210,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                             Text('메인 게이트 카메라 01', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
-                        // Wi-Fi 신호 상태 시각화
                         Row(
                           children: [
                             const Text('상태: ', style: TextStyle(color: Colors.grey, fontSize: 12)),
@@ -216,7 +226,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                       child: Divider(color: Colors.grey, height: 1),
                     ),
                     
-                    // 하단: 비디오 플레이어 컨트롤 버튼들
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -250,7 +259,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // 컨트롤러 버튼 위젯을 생성하는 헬퍼 메서드
   Widget _buildActionBtn({
     required IconData icon,
     required String label,
