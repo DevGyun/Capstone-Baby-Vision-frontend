@@ -1,0 +1,17 @@
+name: eye_catch_app
+description: "우리 아이 안심 모니터링 Eye Catch 플러터 앱"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0            # 웹의 fetch 역할
+  shared_preferences: ^2.2.2 # 웹의 localStorage 역할
+
+flutter:
+  uses-material-design: true
+  # 아이콘이나 폰트를 추가하려면 여기에 설정합니다.
