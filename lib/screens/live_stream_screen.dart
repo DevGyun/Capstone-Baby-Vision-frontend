@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({super.key});
@@ -9,9 +10,13 @@ class LiveStreamScreen extends StatefulWidget {
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  late VlcPlayerController _videoPlayerController;
 
-  // 실제 스트리밍 서버 주소 (웹의 VITE_API_BASE_URL 역할)
-  final String streamUrl = 'https://새로-발급받은-ngrok-주소.ngrok-free.dev';
+  // 💡 [중요] 백엔드 MediaMTX 서버의 실제 RTSP 주소로 변경해야 합니다.
+  // Bridge 설정 파일(config.py)에서 출력 스트림명이 'camera1'이므로 뒤에 /camera1이 붙습니다.
+  // 로컬 테스트 시: rtsp://<서버의_로컬_IP>:8554/camera1
+  // 외부 접속 시: ngrok tcp 8554 명령어로 생성된 tcp 주소를 사용하세요.
+  final String streamUrl = 'rtsp://localhost:8554/camera1';
 
   @override
   void initState() {
@@ -21,11 +26,24 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
+
+    // VLC 플레이어 컨트롤러 초기화 (RTSP 네트워크 스트림 연결)
+    _videoPlayerController = VlcPlayerController.network(
+      streamUrl,
+      hwAcc: HwAcc.full, // 하드웨어 가속 사용 (성능 최적화)
+      autoPlay: true,
+      options: VlcPlayerOptions(
+        advanced: VlcAdvancedOptions([
+          VlcAdvancedOptions.networkCaching(150), // 지연 시간(Latency) 줄이기 (기본값보다 낮춤)
+        ]),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _videoPlayerController.dispose(); // 화면 종료 시 스트림 리소스 해제
     super.dispose();
   }
 
@@ -77,14 +95,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    // 백엔드에서 MJPEG를 쏴준다면 Image.network가 작동할 수 있습니다.
-                    // 향후 RTSP나 특수 포맷인 경우 flutter_vlc_player 패키지로 교체해야 합니다.
-                    child: Image.network(
-                      streamUrl,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Center(child: Text('스트리밍을 연결할 수 없습니다.', style: TextStyle(color: Colors.white)));
-                      },
+                    // 💡 RTSP 영상 플레이어 적용
+                    child: VlcPlayer(
+                      controller: _videoPlayerController,
+                      aspectRatio: 16 / 9,
+                      placeholder: const Center(
+                        child: CircularProgressIndicator(color: Colors.blueAccent),
+                      ),
                     ),
                   ),
                 ),
@@ -108,7 +125,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('메인 게이트 카메라 01', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            Text('네트워크 상태: 양호 (ngrok)', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            Text('스트리밍 연결 상태: 연결됨', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
                           ],
                         ),
                       ],
