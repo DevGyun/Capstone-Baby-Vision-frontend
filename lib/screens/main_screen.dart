@@ -24,8 +24,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   int _selectedCameraIndex = 0;
   final List<Map<String, String>> _cameras = [
     {'name': '아이방', 'url': 'assets/images/1babyscreen.png'}, 
-    {'name': '주방', 'url': 'https://images.unsplash.com/...'}, 
-    {'name': '거실', 'url': 'https://images.unsplash.com/...'},
+    // 아래 URL들을 실제 존재하는 유효한 사진 주소로 변경했습니다.
+    {'name': '주방', 'url': 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80'}, 
+    {'name': '거실', 'url': 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80'},
   ];
 
   @override

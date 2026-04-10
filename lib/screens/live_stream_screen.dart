@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 
@@ -12,15 +14,21 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
   late AnimationController _animationController;
   late VlcPlayerController _videoPlayerController;
   
-  // 💡 수정 1: 녹화 상태를 추적하는 변수 추가
+  //녹화 상태를 추적하는 변수
   bool _isRecording = false;
 
-  // 💡 [중요] 실제 테스트 시 ngrok tcp 주소로 변경하세요.
-  final String streamUrl = 'rtsp://localhost:8554/camera1';
-
+  late String streamUrl;
+  
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      streamUrl = 'rtsp://localhost:8554/camera1';
+    } else if (Platform.isAndroid) {
+      streamUrl = 'rtsp://10.0.2.2:8554/camera1';
+    } else {
+      streamUrl = 'rtsp://localhost:8554/camera1';
+    }
     // LIVE 깜빡임 효과를 위한 애니메이션 컨트롤러
     _animationController = AnimationController(
       vsync: this,
@@ -43,7 +51,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
   @override
   void dispose() {
     _animationController.dispose();
-    // 💡 수정 3: 화면을 벗어날 때 비디오 메모리도 반드시 해제해야 합니다.
     _videoPlayerController.dispose(); 
     super.dispose();
   }
@@ -86,7 +93,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // 📺 3. PIP 모드 모의 기능
   void _enterPIPMode() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
