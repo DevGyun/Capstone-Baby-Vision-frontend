@@ -5,9 +5,12 @@
 *.swp
 .DS_Store
 .atom/
+.build/
 .buildlog/
 .history
 .svn/
+.swiftpm/
+migrate_working_dir/
 
 # IntelliJ related
 *.iml
@@ -15,71 +18,28 @@
 *.iws
 .idea/
 
-# The .vscode folder contains a lot of workspace configuration
-# but one of the files, extensions.json, is highly recommended to be tracked.
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
-.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
-/test_results/
 
-# Android related
-**/android/**/gradle-wrapper.jar
-**/android/.gradle
-**/android/captures/
-**/android/gradlew
-**/android/gradlew.bat
-**/android/local.properties
-**/android/**/GeneratedPluginRegistrant.java
+# Symbolication related
+app.*.symbols
 
-# iOS/macOS related
-**/ios/**/*.mode1v3
-**/ios/**/*.mode2v3
-**/ios/**/*.pbxuser
-**/ios/**/*.perspectivev3
-**/ios/Flutter/App.framework
-**/ios/Flutter/Flutter.framework
-**/ios/Flutter/Flutter.podspec
-**/ios/Flutter/Generated.xcconfig
-**/ios/Flutter/app.flx
-**/ios/Flutter/app.zip
-**/ios/Flutter/flutter_assets/
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/ServiceDefinitions.json
-**/ios/Pods/
-**/ios/.symlinks/
-**/ios/.generated/
-**/macOS/Flutter/GeneratedPluginRegistrant.swift
-**/macOS/Flutter/ephemeral/
+# Obfuscation related
+app.*.map.json
 
-# Windows/Linux related
-**/windows/flutter/ephemeral/
-**/windows/flutter/generated_plugin_registrant.cc
-**/linux/flutter/ephemeral/
-**/linux/flutter/generated_plugin_registrant.cc
-
-# Exceptions to above rules.
-!**/ios/**/*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
-!**/ios/**/*.xcodeproj/project.pbxproj
-!**/ios/**/*.xcodeproj/xcshareddata/workspace.xcscheme
-!**/ios/**/*.xcworkspace/contents.xcworkspacedata
-!**/macOS/**/*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
-!**/macOS/**/*.xcodeproj/project.pbxproj
-!**/macOS/**/*.xcodeproj/xcshareddata/workspace.xcscheme
-!**/macOS/**/*.xcworkspace/contents.xcworkspacedata
-
-# Web related
-lib/generated_plugin_registrant.dart
-
-# 환경변수 (API Key, ngrok 주소 등) 보안
-.env
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release

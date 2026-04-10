@@ -9,10 +9,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_vlc_player: ^7.4.4
-  http: ^1.2.0            # 웹의 fetch 역할
+  http: ^1.6.0            # 웹의 fetch 역할
   shared_preferences: ^2.2.2 # 웹의 localStorage 역할
+  flutter_localizations:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  provider: ^6.1.5+1
+  #firebase_core: ^2.24.2
+  #firebase_messaging: ^14.7.9
+  #flutter_local_notifications: ^17.1.2
 
 flutter:
   uses-material-design: true
   # 아이콘이나 폰트를 추가하려면 여기에 설정합니다.
+  assets:
+    - assets/images/1babyscreen.png

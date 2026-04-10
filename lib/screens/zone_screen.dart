@@ -30,7 +30,7 @@ class ZoneScreen extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: Image.network(
-                    'https://images.unsplash.com/photo-1519340333755-56e9c1d04579?auto=format&fit=crop&q=80',
+                    'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80',
                     width: double.infinity,
                     height: 250,
                     fit: BoxFit.cover,
