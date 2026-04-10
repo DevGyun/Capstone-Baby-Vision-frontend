@@ -1,8 +1,15 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // kIsWeb, defaultTargetPlatform
 import 'package:flutter/material.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
-import '../config.dart'; // RTSP 주소를 가져오기 위한 config
+import '../config.dart';
+
+// 웹 전용 HLS 플레이어 (조건부 import)
+// 웹에서만 dart:html을 사용하므로 별도 파일로 분리하지 않고
+// kIsWeb 분기 내 HtmlElementView로 처리합니다.
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:ui_web' as ui_web if (dart.library.io) 'stub_ui_web.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html if (dart.library.io) 'stub_html.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   const LiveStreamScreen({super.key});
@@ -11,80 +18,103 @@ class LiveStreamScreen extends StatefulWidget {
   State<LiveStreamScreen> createState() => _LiveStreamScreenState();
 }
 
-class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
+class _LiveStreamScreenState extends State<LiveStreamScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  
-  // 💡 수정 1: 웹 환경을 대비해 컨트롤러를 nullable(?)로 변경
-  VlcPlayerController? _videoPlayerController;
-  
+
+  // 앱 전용 VLC 컨트롤러 (nullable — 웹에서는 null)
+  VlcPlayerController? _vlcController;
+
   bool _isRecording = false;
-  late String streamUrl;
-  
+  late String _streamUrl;
+
+  // 웹에서 <video> 엘리먼트를 Flutter 뷰에 연결하는 ID
+  static const String _htmlViewId = 'hls-video-player';
+
   @override
   void initState() {
     super.initState();
-    
-    // config.dart에 추가한 rtspUrl 사용
-    streamUrl = '${AppConfig.rtspUrl}/camera1';
+    _streamUrl = '${AppConfig.rtspUrl}/camera1';
 
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
 
-    // 💡 수정 2: 웹이 아닐 때(안드로이드/iOS)만 VLC 플레이어 초기화
-    if (!kIsWeb) {
-      _videoPlayerController = VlcPlayerController.network(
-        streamUrl,
-        // 💡 수정 3: 에뮬레이터 프리징 방지를 위해 하드웨어 가속 비활성화
-        hwAcc: HwAcc.disabled, 
-        autoPlay: true,
-        options: VlcPlayerOptions(
-          advanced: VlcAdvancedOptions([
-            VlcAdvancedOptions.networkCaching(300), // 연결 안정성을 위해 캐싱 시간 약간 증가
-          ]),
-        ),
-      );
+    if (kIsWeb) {
+      _initWebPlayer();
+    } else {
+      _initVlcPlayer();
     }
+  }
+
+  // ── 웹: HLS 플레이어 초기화 ──────────────────────────────────
+  void _initWebPlayer() {
+    // dart:html의 VideoElement을 생성해 HLS 스트림 연결
+    final videoElement = html.VideoElement()
+      ..src = _streamUrl
+      ..autoplay = true
+      ..controls = false // 커스텀 컨트롤 사용
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..style.objectFit = 'contain'
+      ..style.background = 'black';
+
+    // Flutter Web 렌더러에 HTML 엘리먼트 등록
+    // ignore: undefined_prefixed_name
+    ui_web.platformViewRegistry.registerViewFactory(
+      _htmlViewId,
+      (int viewId) => videoElement,
+    );
+  }
+
+  // ── 앱: VLC RTSP 플레이어 초기화 ─────────────────────────────
+  void _initVlcPlayer() {
+    _vlcController = VlcPlayerController.network(
+      _streamUrl,
+      hwAcc: HwAcc.disabled, // 에뮬레이터 프리징 방지
+      autoPlay: true,
+      options: VlcPlayerOptions(
+        advanced: VlcAdvancedOptions([
+          VlcAdvancedOptions.networkCaching(300),
+        ]),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    // 💡 수정 4: 컨트롤러가 초기화되었을 때만 안전하게 해제
-    _videoPlayerController?.dispose(); 
+    _vlcController?.dispose();
     super.dispose();
   }
 
+  // ── 액션 핸들러 ──────────────────────────────────────────────
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.camera_alt, color: Colors.white),
-            SizedBox(width: 8),
-            Text('화면이 갤러리에 안전하게 저장되었습니다.'),
-          ],
-        ),
+        content: Row(children: [
+          Icon(Icons.camera_alt, color: Colors.white),
+          SizedBox(width: 8),
+          Text('화면이 갤러리에 안전하게 저장되었습니다.'),
+        ]),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   void _toggleRecording() {
-    setState(() {
-      _isRecording = !_isRecording;
-    });
-    
+    setState(() => _isRecording = !_isRecording);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(_isRecording ? Icons.fiber_manual_record : Icons.save_alt, color: Colors.white),
-            SizedBox(width: 8),
-            Text(_isRecording ? '아이의 모습을 녹화하기 시작합니다.' : '녹화가 완료되어 갤러리에 저장되었습니다.'),
-          ],
-        ),
+        content: Row(children: [
+          Icon(
+            _isRecording ? Icons.fiber_manual_record : Icons.save_alt,
+            color: Colors.white,
+          ),
+          const SizedBox(width: 8),
+          Text(_isRecording ? '아이의 모습을 녹화하기 시작합니다.' : '녹화가 완료되어 갤러리에 저장되었습니다.'),
+        ]),
         backgroundColor: _isRecording ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
@@ -101,6 +131,31 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
+  // ── 비디오 영역 위젯 ─────────────────────────────────────────
+  Widget _buildVideoArea() {
+    if (kIsWeb) {
+      // 웹: HtmlElementView로 <video> 태그 렌더링
+      return HtmlElementView(viewType: _htmlViewId);
+    }
+
+    // 앱: VLC 플레이어
+    return VlcPlayer(
+      controller: _vlcController!,
+      aspectRatio: 16 / 9,
+      placeholder: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.blueAccent),
+            SizedBox(height: 16),
+            Text('카메라 신호 대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── 빌드 ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -108,13 +163,17 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A).withOpacity(0.8),
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('실시간 CCTV 모니터링', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          '실시간 CCTV 모니터링',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_in_picture_alt),
-            tooltip: '백그라운드에서 보기 (PIP)',
-            onPressed: _enterPIPMode,
-          ),
+          if (!kIsWeb)
+            IconButton(
+              icon: const Icon(Icons.picture_in_picture_alt),
+              tooltip: '백그라운드에서 보기 (PIP)',
+              onPressed: _enterPIPMode,
+            ),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -128,14 +187,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                   opacity: _animationController,
                   child: Container(
                     width: 8, height: 8,
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    decoration: const BoxDecoration(
+                      color: Colors.red, shape: BoxShape.circle,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Text('LIVE', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                const Text(
+                  'LIVE',
+                  style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
               ],
             ),
-          )
+          ),
         ],
       ),
       body: SafeArea(
@@ -143,6 +207,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              // ── 비디오 영역 ──
               Expanded(
                 child: Stack(
                   children: [
@@ -154,41 +219,15 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: _isRecording ? Colors.redAccent : Colors.grey[800]!,
-                          width: _isRecording ? 2 : 1
+                          width: _isRecording ? 2 : 1,
                         ),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        // 💡 수정 5: 웹 환경일 때와 모바일일 때 화면을 다르게 보여줌
-                        child: kIsWeb 
-                            ? const Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.videocam_off, color: Colors.grey, size: 48),
-                                    SizedBox(height: 16),
-                                    Text('웹 브라우저에서는 영상을 지원하지 않습니다.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                    SizedBox(height: 8),
-                                    Text('안드로이드 에뮬레이터나 실기기를 이용해주세요.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                  ],
-                                ),
-                              )
-                            : VlcPlayer(
-                                controller: _videoPlayerController!,
-                                aspectRatio: 16 / 9,
-                                placeholder: const Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      CircularProgressIndicator(color: Colors.blueAccent),
-                                      SizedBox(height: 16),
-                                      Text('카메라 신호 대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                        child: _buildVideoArea(),
                       ),
                     ),
+                    // REC 표시
                     if (_isRecording)
                       Positioned(
                         top: 16, right: 16,
@@ -210,11 +249,28 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                           ),
                         ),
                       ),
+                    // 웹 안내 배지
+                    if (kIsWeb)
+                      Positioned(
+                        bottom: 12, left: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'HLS 스트림 (웹)',
+                            style: TextStyle(color: Colors.white70, fontSize: 10),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-              
+
+              // ── 컨트롤 패널 ──
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -230,7 +286,10 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                           children: [
                             Icon(Icons.videocam, color: Colors.blueAccent),
                             SizedBox(width: 12),
-                            Text('메인 게이트 카메라 01', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(
+                              '메인 게이트 카메라 01',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
                           ],
                         ),
                         Row(
@@ -238,17 +297,18 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                             const Text('상태: ', style: TextStyle(color: Colors.grey, fontSize: 12)),
                             Icon(Icons.network_wifi, color: Colors.green[400], size: 18),
                             const SizedBox(width: 4),
-                            Text('연결 대기', style: TextStyle(color: Colors.green[400], fontSize: 12, fontWeight: FontWeight.bold)),
+                            Text(
+                              '연결 대기',
+                              style: TextStyle(color: Colors.green[400], fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
                           ],
                         ),
                       ],
                     ),
-                    
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12.0),
                       child: Divider(color: Colors.grey, height: 1),
                     ),
-                    
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
