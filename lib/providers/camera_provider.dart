@@ -2,67 +2,55 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../config.dart'; // AppConfig.baseUrl 사용
+import '../config.dart';
 
 class CameraProvider extends ChangeNotifier {
-  List<Map<String, dynamic>> _cameras = [];
-  bool _isLoading = false;
+  List<dynamic> _cameras = [];
+  List<dynamic> get cameras => _cameras;
 
-  List<Map<String, dynamic>> get cameras => _cameras;
-  bool get isLoading => _isLoading;
-
-  // 카메라 목록 불러오기 (GET /cameras)
-  Future<void> fetchCameras() async {
-    _isLoading = true;
-    notifyListeners();
+  // 카메라 추가 (POST /cameras)
+  Future<bool> addCamera(String name, String streamUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken');
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('eyeCatchToken') ?? '';
-
-      final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/cameras'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'ngrok-skip-browser-warning': '69420',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        _cameras = List<Map<String, dynamic>>.from(data);
-      }
-    } catch (e) {
-      debugPrint('카메라 목록을 불러오는 데 실패했습니다: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  // 카메라 추가하기 (POST /cameras)
-  Future<bool> addCamera(String name) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('eyeCatchToken') ?? '';
-
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/cameras'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'name': name}),
+        // 💡 백엔드로 name과 stream_url을 모두 보냄
+        body: jsonEncode({'name': name, 'stream_url': streamUrl}), 
       );
-
+      
       if (response.statusCode == 200) {
-        // 성공적으로 추가되면 목록을 다시 불러와 화면을 갱신합니다.
-        await fetchCameras();
+        await fetchCameras(); 
         return true;
       }
     } catch (e) {
-      debugPrint('카메라 추가에 실패했습니다: $e');
+      debugPrint('카메라 추가 에러: $e');
     }
     return false;
+  }
+
+  // 카메라 목록 가져오기 (GET /cameras)
+  Future<void> fetchCameras() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken');
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/cameras'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        _cameras = jsonDecode(response.body);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('목록 로드 에러: $e');
+    }
   }
 }

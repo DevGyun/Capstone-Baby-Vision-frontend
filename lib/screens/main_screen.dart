@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 import 'add_camera_screen.dart';
 import '../providers/camera_provider.dart';
 import '../providers/settings_provider.dart';
@@ -20,32 +21,47 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   late AnimationController _pulseController;
-
-  // 💡 선택된 카메라 인덱스와 영상 URL 리스트
   int _selectedCameraIndex = 0;
-  final List<Map<String, String>> _cameras = [
-    {'name': '아이방', 'url': 'assets/images/1babyscreen.png'}, 
-    // 아래 URL들을 실제 존재하는 유효한 사진 주소로 변경했습니다.
-    {'name': '주방', 'url': 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80'}, 
-    {'name': '거실', 'url': 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80'},
-  ];
+
+  // 💡 1. VLC 컨트롤러와 현재 재생 중인 URL 저장 변수 추가
+  VlcPlayerController? _vlcController;
+  String? _lastUrl; 
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CameraProvider>().fetchCameras();
-    });
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CameraProvider>().fetchCameras();
+    });
   }
 
+  // 💡 2. 컨트롤러 해제 로직 (메모리 누수 방지)
   @override
   void dispose() {
+    _vlcController?.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  // 💡 3. 컨트롤러 초기화 함수 수정
+  void _initializePlayer(String rtspUrl) {
+    // 이미 같은 URL이 재생 중이라면 다시 초기화하지 않음
+    if (_lastUrl == rtspUrl) return;
+    
+    _lastUrl = rtspUrl;
+    _vlcController?.dispose(); // 기존 컨트롤러 삭제
+
+    _vlcController = VlcPlayerController.network(
+      rtspUrl,
+      hwAcc: HwAcc.full,
+      autoPlay: true,
+      options: VlcPlayerOptions(),
+    );
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
@@ -173,25 +189,31 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
   }
 
- Widget _buildMainVideoCard(ColorScheme colorScheme) {
-    // 💡 백엔드에서 받아온 데이터 사용
+Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
-    // 카메라가 한 대도 없을 때의 화면
+    // 1. 카메라가 없는 경우 처리
     if (cameras.isEmpty) {
       return Container(
         width: double.infinity, height: 200,
         decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(24)),
-        child: const Center(child: Text('등록된 카메라가 없습니다.\n아래 + 버튼을 눌러 추가해주세요.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))),
+        child: const Center(child: Text('등록된 카메라가 없습니다.\n+ 버튼을 눌러 추가해주세요.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))),
       );
     }
 
-    // 카메라 삭제 등으로 인덱스가 초과될 경우 방어 로직
-    if (_selectedCameraIndex >= cameras.length) _selectedCameraIndex = 0;
-    
+    // 2. 인덱스 방어 로직
+    if (_selectedCameraIndex >= cameras.length) {
+      _selectedCameraIndex = 0;
+    }
+
     final currentCam = cameras[_selectedCameraIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
-    final String camUrl = 'assets/images/1babyscreen.png'; // rtsp 재생 전까지 임시 이미지 표시
+    final String streamUrl = currentCam['stream_url'] ?? '';
+
+    // 3. 💡 스트리밍 URL이 있을 때만 플레이어 초기화 호출
+    if (streamUrl.isNotEmpty) {
+      _initializePlayer(streamUrl);
+    }
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen())),
@@ -209,7 +231,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(camUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
+                // 💡 VLC 플레이어 화면
+                if (_vlcController != null && streamUrl.isNotEmpty)
+                  VlcPlayer(
+                    controller: _vlcController!,
+                    aspectRatio: 16 / 9,
+                    placeholder: const Center(child: CircularProgressIndicator()),
+                  )
+                else
+                  const Center(child: Text('스트리밍 연결 대기 중...', style: TextStyle(color: Colors.white))),
+
+                // --- 상단 위험 구역 표시 (DANGER ZONE) ---
                 Positioned(
                   top: 40, left: 60,
                   child: Container(
@@ -224,6 +256,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     ),
                   ),
                 ),
+
+                // --- 하단 카메라 정보 표시 ---
                 Positioned(
                   bottom: 12, left: 12, right: 12,
                   child: ClipRRect(

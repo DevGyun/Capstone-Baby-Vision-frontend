@@ -11,13 +11,18 @@ class AddCameraScreen extends StatefulWidget {
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
   final TextEditingController _nameController = TextEditingController();
+  // 💡 1. RTSP 주소를 입력받을 컨트롤러 추가
+  final TextEditingController _urlController = TextEditingController(); 
   bool _isSubmitting = false;
 
   void _submit() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) {
+    final url = _urlController.text.trim();
+
+    // 💡 2. 이름과 주소를 모두 입력했는지 검사하도록 수정
+    if (name.isEmpty || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('카메라 이름을 입력해주세요.')),
+        const SnackBar(content: Text('카메라 이름과 주소를 모두 입력해주세요.')),
       );
       return;
     }
@@ -25,7 +30,8 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     setState(() => _isSubmitting = true);
 
     final provider = context.read<CameraProvider>();
-    final success = await provider.addCamera(name);
+    // 💡 3. Provider로 name과 url을 같이 넘겨주도록 수정
+    final success = await provider.addCamera(name, url);
 
     setState(() => _isSubmitting = false);
 
@@ -33,7 +39,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('카메라가 성공적으로 추가되었습니다.')),
       );
-      Navigator.pop(context); // 추가 성공 후 메인 화면으로 복귀
+      Navigator.pop(context); // 추가 성공 후 메인 화면으로 창 닫기
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('카메라 추가에 실패했습니다. 다시 시도해주세요.')),
@@ -58,10 +64,12 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '모니터링할 장소의\n이름을 입력해주세요.',
+              '모니터링할 장소의\n이름과 주소를 입력해주세요.', // 💡 문구 수정
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, height: 1.3),
             ),
             const SizedBox(height: 32),
+            
+            // 이름 입력 필드
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
@@ -70,6 +78,18 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
                 prefixIcon: const Icon(Icons.videocam_outlined),
               ),
             ),
+            const SizedBox(height: 16),
+            
+            // 💡 4. RTSP 주소 입력 필드 UI 추가
+            TextField(
+              controller: _urlController,
+              decoration: InputDecoration(
+                labelText: '카메라 RTSP 주소 (예: rtsp://192.168.0.55/stream)',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                prefixIcon: const Icon(Icons.link),
+              ),
+            ),
+            
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
