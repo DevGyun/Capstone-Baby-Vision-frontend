@@ -43,7 +43,11 @@ class AuthProvider extends ChangeNotifier {
         
         final userResponse = await http.get(
           Uri.parse('${AppConfig.baseUrl}/users/me'),
-          headers: {'Authorization': 'Bearer $token'},
+          headers: {
+            'Authorization': 'Bearer $token',
+            // ✅ 수정 1: 두 번째 요청에도 ngrok 우회 헤더 추가
+            'ngrok-skip-browser-warning': '69420',
+          },
         );
 
         if (userResponse.statusCode == 200) {
@@ -56,7 +60,12 @@ class AuthProvider extends ChangeNotifier {
         final errorData = jsonDecode(response.body);
         onError(errorData['detail'] ?? '이메일 또는 비밀번호가 틀렸습니다.');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      // ✅ 수정 2: catch 블록에 디버깅용 에러 출력 추가
+      print('🚨 로그인 통신 에러 발생: $e');
+      print('🚨 스택 트레이스: $stackTrace');
+      
+      // 기존 에러 메시지
       onError('서버와 통신할 수 없습니다.\n인터넷 연결이나 서버 상태를 확인해주세요.');
     } finally {
       _isLoading = false;

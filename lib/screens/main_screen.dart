@@ -1,7 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'add_camera_screen.dart';
+import '../providers/camera_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/log_provider.dart';
 import 'zone_screen.dart';
@@ -32,6 +33,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CameraProvider>().fetchCameras();
+    });
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -169,8 +173,25 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildMainVideoCard(ColorScheme colorScheme) {
-    final currentCam = _cameras[_selectedCameraIndex];
+ Widget _buildMainVideoCard(ColorScheme colorScheme) {
+    // 💡 백엔드에서 받아온 데이터 사용
+    final cameras = context.watch<CameraProvider>().cameras;
+
+    // 카메라가 한 대도 없을 때의 화면
+    if (cameras.isEmpty) {
+      return Container(
+        width: double.infinity, height: 200,
+        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(24)),
+        child: const Center(child: Text('등록된 카메라가 없습니다.\n아래 + 버튼을 눌러 추가해주세요.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))),
+      );
+    }
+
+    // 카메라 삭제 등으로 인덱스가 초과될 경우 방어 로직
+    if (_selectedCameraIndex >= cameras.length) _selectedCameraIndex = 0;
+    
+    final currentCam = cameras[_selectedCameraIndex];
+    final String camName = currentCam['name'] ?? '알 수 없는 카메라';
+    final String camUrl = 'assets/images/1babyscreen.png'; // rtsp 재생 전까지 임시 이미지 표시
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen())),
@@ -188,25 +209,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // AnimatedSwitcher를 넣어서 부드러운 전환 효과 추가
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: currentCam['url']!.startsWith('http')
-                      ? Image.network(
-                          currentCam['url']!,
-                          key: ValueKey<String>(currentCam['url']!),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        )
-                      : Image.asset(
-                          currentCam['url']!,
-                          key: ValueKey<String>(currentCam['url']!),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        ),
-                ),
+                Image.asset(camUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity),
                 Positioned(
                   top: 40, left: 60,
                   child: Container(
@@ -237,7 +240,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                               children: [
                                 const Icon(Icons.videocam, color: Colors.white, size: 16),
                                 const SizedBox(width: 6),
-                                Text('CAM 0${_selectedCameraIndex + 1} - ${currentCam['name']}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('CAM 0${_selectedCameraIndex + 1} - $camName', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             ),
                             Icon(Icons.fullscreen, color: Colors.white.withOpacity(0.8), size: 20)
@@ -256,29 +259,40 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildThumbnailsRow(ColorScheme colorScheme) {
+    // 💡 백엔드에서 받아온 데이터 사용
+    final cameras = context.watch<CameraProvider>().cameras;
+
     return Row(
       children: [
-        // 카메라 리스트를 순회하며 썸네일 생성
-        for (int i = 0; i < _cameras.length; i++) ...[
+        // 실제 카메라 리스트 렌더링
+        for (int i = 0; i < cameras.length; i++) ...[
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _selectedCameraIndex = i),
-              child: _buildThumbnail(_cameras[i]['url']!, isActive: _selectedCameraIndex == i),
+              child: _buildThumbnail('assets/images/eyeCatchicon.png', isActive: _selectedCameraIndex == i),
             ),
           ),
           const SizedBox(width: 12),
         ],
-        // 여분 카메라 추가 버튼
+        // 💡 여분 카메라 추가 버튼 (클릭 시 AddCameraScreen으로 이동)
         Expanded(
-          child: AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Container(
-              decoration: BoxDecoration(
-                color: colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddCameraScreen()),
+              );
+            },
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
+                ),
+                child: Icon(Icons.add, color: colorScheme.outline),
               ),
-              child: Icon(Icons.add, color: colorScheme.outline),
             ),
           ),
         ),
