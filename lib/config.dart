@@ -2,19 +2,30 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 class AppConfig {
+  // 💡 메인 API 서버 주소 (FastAPI)
   static String get baseUrl {
-    if (kIsWeb) return 'https://succeedable-untabled-dewitt.ngrok-free.dev'; 
-    else if (Platform.isAndroid) return 'http://10.0.2.2:8000'; 
-    else return 'http://localhost:8000'; 
+    if (kIsWeb) {
+      return 'https://succeedable-untabled-dewitt.ngrok-free.dev'; 
+    } else if (Platform.isAndroid) {
+      // 안드로이드 에뮬레이터에서 호스트(내 컴퓨터)의 localhost에 접속하기 위한 주소입니다.
+      return 'http://10.0.2.2:8000'; 
+    } else {
+      return 'http://localhost:8000'; 
+    }
   }
 
+  // 💡 실시간 로그/알림용 WebSocket 주소
   static String get wsUrl {
-    if (kIsWeb) return 'wss://succeedable-untabled-dewitt.ngrok-free.dev';
-    else if (Platform.isAndroid) return 'ws://10.0.2.2:8000';
-    else return 'ws://localhost:8000';
+    if (kIsWeb) {
+      return 'wss://succeedable-untabled-dewitt.ngrok-free.dev';
+    } else if (Platform.isAndroid) {
+      return 'ws://10.0.2.2:8000';
+    } else {
+      return 'ws://localhost:8000';
+    }
   }
 
-  // 💡 새롭게 추가할 부분: RTSP 스트리밍 서버 주소
+  // 💡 RTSP 송출용 주소 (MediaMTX)
   static String get rtspUrl {
     if (kIsWeb) {
       return 'rtsp://succeedable-untabled-dewitt.ngrok-free.dev';
@@ -22,6 +33,18 @@ class AppConfig {
       return 'rtsp://10.0.2.2:8554';
     } else {
       return 'rtsp://localhost:8554';
+    }
+  }
+
+  // 앱 내 영상 재생용 HLS 주소 (MediaMTX)
+  // RTSP보다 플러터 앱에서 더 안정적으로 재생됩니다.
+  static String get hlsUrl {
+    if (kIsWeb) {
+      return 'http://succeedable-untabled-dewitt.ngrok-free.dev:8888';
+    } else if (Platform.isAndroid) {
+      return 'http://10.0.2.2:8888';
+    } else {
+      return 'http://localhost:8888';
     }
   }
 }

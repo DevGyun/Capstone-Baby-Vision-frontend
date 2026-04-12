@@ -11,7 +11,6 @@ class AddCameraScreen extends StatefulWidget {
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
   final TextEditingController _nameController = TextEditingController();
-  // 💡 1. RTSP 주소를 입력받을 컨트롤러 추가
   final TextEditingController _urlController = TextEditingController(); 
   bool _isSubmitting = false;
 
@@ -19,7 +18,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     final name = _nameController.text.trim();
     final url = _urlController.text.trim();
 
-    // 💡 2. 이름과 주소를 모두 입력했는지 검사하도록 수정
     if (name.isEmpty || url.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('카메라 이름과 주소를 모두 입력해주세요.')),
@@ -30,16 +28,16 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     setState(() => _isSubmitting = true);
 
     final provider = context.read<CameraProvider>();
-    // 💡 3. Provider로 name과 url을 같이 넘겨주도록 수정
     final success = await provider.addCamera(name, url);
 
     setState(() => _isSubmitting = false);
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('카메라가 성공적으로 추가되었습니다.')),
+        // 💡 [안내 문구 살짝 변경] 기기 연동을 강조
+        const SnackBar(content: Text('카메라 등록 및 연동이 완료되었습니다.')),
       );
-      Navigator.pop(context); // 추가 성공 후 메인 화면으로 창 닫기
+      Navigator.pop(context); 
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('카메라 추가에 실패했습니다. 다시 시도해주세요.')),
@@ -64,12 +62,11 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '모니터링할 장소의\n이름과 주소를 입력해주세요.', // 💡 문구 수정
+              '모니터링할 장소의\n이름과 주소를 입력해주세요.',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, height: 1.3),
             ),
             const SizedBox(height: 32),
             
-            // 이름 입력 필드
             TextField(
               controller: _nameController,
               decoration: InputDecoration(
@@ -80,11 +77,10 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
             ),
             const SizedBox(height: 16),
             
-            // 💡 4. RTSP 주소 입력 필드 UI 추가
             TextField(
               controller: _urlController,
               decoration: InputDecoration(
-                labelText: '카메라 RTSP 주소 (예: rtsp://192.168.0.55/stream)',
+                labelText: '카메라 내부망 주소 (예: rtsp://192.168.0.55/stream)', // 💡 라벨 문구를 내부망임을 알 수 있게 조금 다듬음
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 prefixIcon: const Icon(Icons.link),
               ),
@@ -101,8 +97,19 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
                   foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
+                // 💡 [추가/수정된 부분] 통신 중일 때 로딩바 옆에 텍스트를 띄워서 체감 대기시간 완화
                 child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20, height: 20, 
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                          ),
+                          SizedBox(width: 12),
+                          Text('기기 연동 중...', style: TextStyle(fontSize: 16, color: Colors.white))
+                        ],
+                      )
                     : const Text('카메라 등록', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             )
