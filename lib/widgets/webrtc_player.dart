@@ -22,6 +22,9 @@ class _WebRtcPlayerState extends State<WebRtcPlayer> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   RTCPeerConnection? _peerConnection;
   WebSocketChannel? _channel;
+  
+  // 💡 비디오 트랙 수신 여부를 확인하는 상태 변수 추가
+  bool _isVideoReady = false; 
 
   @override
   void initState() {
@@ -32,10 +35,7 @@ class _WebRtcPlayerState extends State<WebRtcPlayer> {
   Future<void> _initWebRTC() async {
     await _localRenderer.initialize();
 
-    // 💡 수정된 부분: 하드코딩된 주소 대신 AppConfig.wsUrl을 사용합니다!
-    // 웹, 안드로이드, iOS 환경에 따라 config.dart에 설정된 주소를 자동으로 가져옵니다.
     final wsUrl = Uri.parse('${AppConfig.wsUrl}/ws/signaling/${widget.clientId}');
-    
     _channel = WebSocketChannel.connect(wsUrl);
 
     Map<String, dynamic> configuration = {
@@ -50,6 +50,8 @@ class _WebRtcPlayerState extends State<WebRtcPlayer> {
       if (event.track.kind == 'video') {
         setState(() {
           _localRenderer.srcObject = event.streams[0];
+          // 💡 영상 트랙이 들어오면 준비 완료 상태로 변경!
+          _isVideoReady = true; 
         });
       }
     };
@@ -111,10 +113,51 @@ class _WebRtcPlayerState extends State<WebRtcPlayer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black,
-      child: RTCVideoView(
-        _localRenderer,
-        objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+      color: Colors.black, // 배경을 항상 까맣게 유지
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. 실제 영상 렌더러 (항상 렌더링은 하되 데이터가 없으면 투명하게 대기)
+          RTCVideoView(
+            _localRenderer,
+            objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+          ),
+
+          // 2. 💡 영상이 아직 안 들어왔을 때 보여줄 로딩 오버레이 UI
+          if (!_isVideoReady)
+            Container(
+              color: Colors.black87, // 영상 렌더러 위를 살짝 덮음
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(
+                      color: Colors.blueAccent,
+                      strokeWidth: 3,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      '안전한 P2P 연결을 생성 중입니다...',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '카메라 모듈과 통신 중',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
