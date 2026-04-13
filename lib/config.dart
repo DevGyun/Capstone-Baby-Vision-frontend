@@ -5,7 +5,7 @@ class AppConfig {
   // 💡 메인 API 서버 주소 (FastAPI)
   static String get baseUrl {
     if (kIsWeb) {
-      return 'https://succeedable-untabled-dewitt.ngrok-free.dev'; 
+      return 'http://localhost:8000'; // 웹에서는 ngrok 주소로 대체됩니다.
     } else if (Platform.isAndroid) {
       // 안드로이드 에뮬레이터에서 호스트(내 컴퓨터)의 localhost에 접속하기 위한 주소입니다.
       return 'http://10.0.2.2:8000'; 

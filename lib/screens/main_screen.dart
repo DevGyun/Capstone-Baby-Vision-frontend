@@ -23,10 +23,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   late AnimationController _pulseController;
   int _selectedCameraIndex = 0;
 
-  // 💡 1. VLC 컨트롤러와 현재 재생 중인 URL 저장 변수 추가
-  VlcPlayerController? _vlcController;
-  String? _lastUrl; 
-
   @override
   void initState() {
     super.initState();
@@ -40,28 +36,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     });
   }
 
-  // 💡 2. 컨트롤러 해제 로직 (메모리 누수 방지)
+  // 컨트롤러 해제 로직 (메모리 누수 방지)
   @override
   void dispose() {
-    _vlcController?.dispose();
     _pulseController.dispose();
     super.dispose();
-  }
-
-  // 💡 3. 컨트롤러 초기화 함수 수정
-  void _initializePlayer(String rtspUrl) {
-    // 이미 같은 URL이 재생 중이라면 다시 초기화하지 않음
-    if (_lastUrl == rtspUrl) return;
-    
-    _lastUrl = rtspUrl;
-    _vlcController?.dispose(); // 기존 컨트롤러 삭제
-
-    _vlcController = VlcPlayerController.network(
-      rtspUrl,
-      hwAcc: HwAcc.full,
-      autoPlay: true,
-      options: VlcPlayerOptions(),
-    );
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
@@ -201,19 +180,18 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
       );
     }
 
-    // 2. 인덱스 방어 로직
-    if (_selectedCameraIndex >= cameras.length) {
-      _selectedCameraIndex = 0;
+    // 2. 인덱스 방어 로직 안전하게 수행
+    int safeIndex = _selectedCameraIndex;
+    if (safeIndex >= cameras.length) {
+      safeIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _selectedCameraIndex = 0);
+      });
     }
 
-    final currentCam = cameras[_selectedCameraIndex];
+    final currentCam = cameras[safeIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
     final String streamUrl = currentCam['stream_url'] ?? '';
-
-    // 3. 💡 스트리밍 URL이 있을 때만 플레이어 초기화 호출
-    if (streamUrl.isNotEmpty) {
-      _initializePlayer(streamUrl);
-    }
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen())),
@@ -231,15 +209,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 💡 VLC 플레이어 화면
-                if (_vlcController != null && streamUrl.isNotEmpty)
-                  VlcPlayer(
-                    controller: _vlcController!,
-                    aspectRatio: 16 / 9,
-                    placeholder: const Center(child: CircularProgressIndicator()),
-                  )
-                else
-                  const Center(child: Text('스트리밍 연결 대기 중...', style: TextStyle(color: Colors.white))),
+                SafeVlcPlayer(streamUrl: streamUrl),
 
                 // --- 상단 위험 구역 표시 (DANGER ZONE) ---
                 Positioned(
@@ -274,7 +244,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
                               children: [
                                 const Icon(Icons.videocam, color: Colors.white, size: 16),
                                 const SizedBox(width: 6),
-                                Text('CAM 0${_selectedCameraIndex + 1} - $camName', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                Text('CAM 0${safeIndex + 1} - $camName', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                               ],
                             ),
                             Icon(Icons.fullscreen, color: Colors.white.withOpacity(0.8), size: 20)
@@ -517,6 +487,81 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
           ],
         ),
       ),
+    );
+  }
+}
+// 💡 파일 맨 아래에 추가하세요.
+class SafeVlcPlayer extends StatefulWidget {
+  final String streamUrl;
+  const SafeVlcPlayer({super.key, required this.streamUrl});
+
+  @override
+  State<SafeVlcPlayer> createState() => _SafeVlcPlayerState();
+}
+
+class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
+  VlcPlayerController? _vlcController;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant SafeVlcPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // URL(카메라)이 바뀌면 기존 컨트롤러를 안전하게 폐기하고 새로 생성
+    if (oldWidget.streamUrl != widget.streamUrl) {
+      _disposeController();
+      _initialize();
+    }
+  }
+
+  void _initialize() {
+    if (widget.streamUrl.isEmpty) return;
+    
+    _vlcController = VlcPlayerController.network(
+      widget.streamUrl,
+      // 🚨 HwAcc.full은 특정 모바일 기기에서 앱을 강제 종료(뻗음)시킵니다. auto로 변경!
+      hwAcc: HwAcc.auto, 
+      autoPlay: true,
+      options: VlcPlayerOptions(),
+    );
+  }
+
+  Future<void> _disposeController() async {
+    final oldController = _vlcController;
+    _vlcController = null;
+    if (oldController != null) {
+      try {
+        // 네이티브 메모리 찌꺼기가 남아서 뻗는 현상 방지
+        await oldController.stopRendererScanning();
+        await oldController.dispose();
+      } catch (_) {}
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeController();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.streamUrl.isEmpty || _vlcController == null) {
+      return const Center(
+        child: Text('스트리밍 연결 대기 중...', style: TextStyle(color: Colors.white)),
+      );
+    }
+
+    // 💡 Key를 부여하여 컨트롤러가 바뀔 때 위젯 트리를 완전히 새로고침 하도록 강제
+    return VlcPlayer(
+      key: ValueKey(_vlcController.hashCode),
+      controller: _vlcController!,
+      aspectRatio: 16 / 9,
+      placeholder: const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
 }
