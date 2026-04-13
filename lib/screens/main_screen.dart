@@ -1,17 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 import 'package:flutter/foundation.dart';
 import 'add_camera_screen.dart';
 import '../providers/camera_provider.dart';
-import '../providers/settings_provider.dart';
 import '../providers/log_provider.dart';
 import 'zone_screen.dart';
 import 'settings_screen.dart';
 import 'history_screen.dart';
 import 'live_stream_screen.dart';
-import '../widgets/webrtc_player.dart'; //
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -38,7 +35,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     });
   }
 
-  // 컨트롤러 해제 로직 (메모리 누수 방지)
   @override
   void dispose() {
     _pulseController.dispose();
@@ -52,24 +48,34 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: Stack(
-        children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: [
-              _buildMonitoringView(colorScheme),
-              const ZoneScreen(),
-              const HistoryScreen(),
-              const SettingsScreen(),
-            ],
+      backgroundColor: Colors.black87, // PC 환경에서 바깥 배경을 어둡게
+      // 💡 [웹 비율 고정 기능] 화면 가운데에 모바일 크기(최대 너비 480)로 앱을 띄웁니다.
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            color: colorScheme.surface, // 실제 모바일 앱의 배경색
+            child: Stack(
+              children: [
+                IndexedStack(
+                  index: _selectedIndex,
+                  children: [
+                    _buildMonitoringView(colorScheme),
+                    const ZoneScreen(),
+                    const HistoryScreen(),
+                    const SettingsScreen(),
+                  ],
+                ),
+                Positioned(
+                  bottom: 24, left: 24, right: 24,
+                  child: _buildFloatingNavBar(colorScheme),
+                ),
+              ],
+            ),
           ),
-          Positioned(
-            bottom: 24, left: 24, right: 24,
-            child: _buildFloatingNavBar(colorScheme),
-          ),
-        ],
+        ),
       ),
+      // 경보 버튼 역시 PC 웹화면 중앙 정렬에 맞춰 이동시킴
       floatingActionButton: _selectedIndex == 0 
         ? Padding(
             padding: const EdgeInsets.only(bottom: 80.0),
@@ -132,11 +138,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             ),
             const SizedBox(height: 20),
             
-            // 💡 선택된 카메라가 메인 영상에 나오도록 변경
+            // 재생 대기 화면이 렌더링 됩니다. (크래시 방지용)
             _buildMainVideoCard(colorScheme),
             const SizedBox(height: 16),
             
-            // 💡 서브 썸네일 클릭 시 메인 영상 전환되도록 변경
             _buildThumbnailsRow(colorScheme),
             const SizedBox(height: 24),
             _buildAiStatusCard(colorScheme),
@@ -170,10 +175,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
   }
 
-Widget _buildMainVideoCard(ColorScheme colorScheme) {
+  // 💡 메인 스크린에서는 영상을 렌더링하지 않고 대기 화면만 보여줍니다.
+  Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
-    // 1. 카메라가 없을 때의 예외 처리
     if (cameras.isEmpty) {
       return Container(
         width: double.infinity, height: 200,
@@ -182,28 +187,16 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
       );
     }
 
-    // 2. 인덱스 방어 로직
     int safeIndex = _selectedCameraIndex;
     if (safeIndex >= cameras.length) safeIndex = 0;
 
-    // 3. 💡 에러가 났던 변수 선언부 (이곳에서 선언되어야 아래에서 쓸 수 있습니다)
     final currentCam = cameras[safeIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
     final String cameraId = currentCam['id']?.toString() ?? 'cam_0${safeIndex + 1}'; 
 
-    // 4. 화면 렌더링 시작
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LiveStreamScreen(
-              cameraId: cameraId,
-              cameraName: camName,
-            ),
-          ),
-        );
-      },
+      // 💡 여기서 라이브 스크린으로 카메라 ID를 넘깁니다.
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveStreamScreen(cameraId: cameraId, cameraName: camName))),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Container(
@@ -217,7 +210,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // --- 중앙 재생 버튼 UI ---
+              // --- 대기 화면 (재생 버튼) ---
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -225,8 +218,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        shape: BoxShape.circle,
+                        color: colorScheme.primary, shape: BoxShape.circle,
                         boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 12, spreadRadius: 4)]
                       ),
                       child: Icon(Icons.play_arrow_rounded, size: 40, color: colorScheme.onPrimary),
@@ -237,7 +229,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
                 ),
               ),
 
-              // --- 상단 위험 구역 활성화 표시 ---
+              // --- 상단 위험 구역 표시 ---
               Positioned(
                 top: 16, left: 16,
                 child: Container(
@@ -284,7 +276,42 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
     );
   }
 
-  Widget _buildThumbnailsRow(String url, {bool isActive = false}) {
+  Widget _buildThumbnailsRow(ColorScheme colorScheme) {
+    final cameras = context.watch<CameraProvider>().cameras;
+
+    return Row(
+      children: [
+        for (int i = 0; i < cameras.length; i++) ...[
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedCameraIndex = i),
+              // 💡 파일 경로 오타 (..assets -> assets) 수정 완료
+              child: _buildThumbnail('assets/images/1babyscreen.png', isActive: _selectedCameraIndex == i),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCameraScreen())),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
+                ),
+                child: Icon(Icons.add, color: colorScheme.outline),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThumbnail(String url, {bool isActive = false}) {
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Container(
@@ -294,7 +321,6 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(isActive ? 9 : 12),
-          // 💡 해결 방법: URL이 http로 시작하면 network로, 아니면 asset으로 띄웁니다!
           child: url.startsWith('http')
               ? Image.network(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken)
               : Image.asset(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken),
@@ -348,7 +374,6 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
   }
 
   Widget _buildLiveLogsPanel(ColorScheme colorScheme) {
-    // 💡 Provider에서 로그 데이터를 가져옵니다 (최대 2개만 보여줌)
     final logs = context.watch<LogProvider>().logs;
     final displayLogs = logs.take(2).toList(); 
 
@@ -371,12 +396,9 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
               ],
             ),
           ),
-          
-          // 💡 공통 로그 데이터를 UI로 변환하여 출력
           ...displayLogs.map((log) => _buildLogItem(colorScheme, log)),
-
           InkWell(
-            onTap: () => setState(() => _selectedIndex = 2), // 위험 로그 탭으로 이동
+            onTap: () => setState(() => _selectedIndex = 2),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -449,7 +471,6 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _selectedIndex == index;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
@@ -457,103 +478,16 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(color: isSelected ? colorScheme.primaryContainer : Colors.transparent, borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: isSelected ? Theme.of(context).colorScheme.primaryContainer : Colors.transparent, borderRadius: BorderRadius.circular(20)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 24, color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant),
+            Icon(icon, size: 24, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant)),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
-    );
-  }
-}
-class SafeVlcPlayer extends StatefulWidget {
-  final String streamUrl;
-  const SafeVlcPlayer({super.key, required this.streamUrl});
-
-  @override
-  State<SafeVlcPlayer> createState() => _SafeVlcPlayerState();
-}
-
-class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
-  VlcPlayerController? _vlcController;
-
-  @override
-  void initState() {
-    super.initState();
-    _initialize();
-  }
-
-  @override
-  void didUpdateWidget(covariant SafeVlcPlayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.streamUrl != widget.streamUrl) {
-      _disposeController();
-      _initialize();
-    }
-  }
-
-  void _initialize() {
-    // 💡 1. 웹 환경에서는 VLC 컨트롤러를 초기화하지 않고 바로 리턴합니다.
-    if (kIsWeb) return; 
-    
-    if (widget.streamUrl.isEmpty) return;
-    
-    _vlcController = VlcPlayerController.network(
-      widget.streamUrl,
-      hwAcc: HwAcc.auto, 
-      autoPlay: true,
-      options: VlcPlayerOptions(),
-    );
-  }
-
-  Future<void> _disposeController() async {
-    // 웹 환경이어서 컨트롤러가 null이면 아무것도 하지 않습니다.
-    if (_vlcController == null) return; 
-    
-    final oldController = _vlcController;
-    _vlcController = null;
-    if (oldController != null) {
-      try {
-        await oldController.stopRendererScanning();
-        await oldController.dispose();
-      } catch (_) {}
-    }
-  }
-
-  @override
-  void dispose() {
-    _disposeController();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 💡 2. 웹 환경일 때 보여줄 대체 UI 설정
-    if (kIsWeb) {
-      return const Center(
-        child: Text(
-          '웹 환경(Chrome)에서는\nVLC 플레이어를 지원하지 않습니다.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      );
-    }
-
-    if (widget.streamUrl.isEmpty || _vlcController == null) {
-      return const Center(
-        child: Text('스트리밍 연결 대기 중...', style: TextStyle(color: Colors.white)),
-      );
-    }
-
-    return VlcPlayer(
-      key: ValueKey(_vlcController.hashCode),
-      controller: _vlcController!,
-      aspectRatio: 16 / 9,
-      placeholder: const Center(child: CircularProgressIndicator(color: Colors.white)),
     );
   }
 }
