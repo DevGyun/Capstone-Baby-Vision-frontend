@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../config.dart';
 
 class WebRtcPlayer extends StatefulWidget {
   final String cameraId;
@@ -31,8 +32,10 @@ class _WebRtcPlayerState extends State<WebRtcPlayer> {
   Future<void> _initWebRTC() async {
     await _localRenderer.initialize();
 
-    // 💡 FastAPI 서버 IP 또는 도메인으로 변경해야 합니다.
-    final wsUrl = Uri.parse('ws://서버주소/ws/signaling/${widget.clientId}');
+    // 💡 수정된 부분: 하드코딩된 주소 대신 AppConfig.wsUrl을 사용합니다!
+    // 웹, 안드로이드, iOS 환경에 따라 config.dart에 설정된 주소를 자동으로 가져옵니다.
+    final wsUrl = Uri.parse('${AppConfig.wsUrl}/ws/signaling/${widget.clientId}');
+    
     _channel = WebSocketChannel.connect(wsUrl);
 
     Map<String, dynamic> configuration = {
