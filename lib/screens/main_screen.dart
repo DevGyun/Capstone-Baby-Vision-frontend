@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'package:flutter/foundation.dart';
 import 'add_camera_screen.dart';
 import '../providers/camera_provider.dart';
 import '../providers/settings_provider.dart';
@@ -10,6 +11,7 @@ import 'zone_screen.dart';
 import 'settings_screen.dart';
 import 'history_screen.dart';
 import 'live_stream_screen.dart';
+import '../widgets/webrtc_player.dart'; //
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -171,7 +173,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
-    // 1. 카메라가 없는 경우 처리
     if (cameras.isEmpty) {
       return Container(
         width: double.infinity, height: 200,
@@ -180,7 +181,6 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
       );
     }
 
-    // 2. 인덱스 방어 로직 안전하게 수행
     int safeIndex = _selectedCameraIndex;
     if (safeIndex >= cameras.length) {
       safeIndex = 0;
@@ -192,6 +192,9 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final currentCam = cameras[safeIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
     final String streamUrl = currentCam['stream_url'] ?? '';
+    
+    // 💡 백엔드에서 받아온 카메라 고유 ID를 추출합니다. (키값은 백엔드 응답에 맞게 수정하세요)
+    final String cameraId = currentCam['id']?.toString() ?? 'cam_0${safeIndex + 1}'; 
 
     return GestureDetector(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen())),
@@ -209,7 +212,13 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                SafeVlcPlayer(streamUrl: streamUrl),
+                // 💡 핵심 변경 부분: 환경에 따라 플레이어 분기
+                kIsWeb 
+                  ? WebRtcPlayer(
+                      cameraId: cameraId, 
+                      clientId: 'web_client_user', // 추후 AuthProvider에서 유저 ID를 가져와 넣을 수 있습니다.
+                    )
+                  : SafeVlcPlayer(streamUrl: streamUrl),
 
                 // --- 상단 위험 구역 표시 (DANGER ZONE) ---
                 Positioned(
@@ -273,7 +282,7 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _selectedCameraIndex = i),
-              child: _buildThumbnail('assets/images/eyeCatchicon.png', isActive: _selectedCameraIndex == i),
+              child: _buildThumbnail('..assets/images/1babyscreen.png', isActive: _selectedCameraIndex == i),
             ),
           ),
           const SizedBox(width: 12),
@@ -490,7 +499,6 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
     );
   }
 }
-// 💡 파일 맨 아래에 추가하세요.
 class SafeVlcPlayer extends StatefulWidget {
   final String streamUrl;
   const SafeVlcPlayer({super.key, required this.streamUrl});
@@ -511,7 +519,6 @@ class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
   @override
   void didUpdateWidget(covariant SafeVlcPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // URL(카메라)이 바뀌면 기존 컨트롤러를 안전하게 폐기하고 새로 생성
     if (oldWidget.streamUrl != widget.streamUrl) {
       _disposeController();
       _initialize();
@@ -519,11 +526,13 @@ class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
   }
 
   void _initialize() {
+    // 💡 1. 웹 환경에서는 VLC 컨트롤러를 초기화하지 않고 바로 리턴합니다.
+    if (kIsWeb) return; 
+    
     if (widget.streamUrl.isEmpty) return;
     
     _vlcController = VlcPlayerController.network(
       widget.streamUrl,
-      // 🚨 HwAcc.full은 특정 모바일 기기에서 앱을 강제 종료(뻗음)시킵니다. auto로 변경!
       hwAcc: HwAcc.auto, 
       autoPlay: true,
       options: VlcPlayerOptions(),
@@ -531,11 +540,13 @@ class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
   }
 
   Future<void> _disposeController() async {
+    // 웹 환경이어서 컨트롤러가 null이면 아무것도 하지 않습니다.
+    if (_vlcController == null) return; 
+    
     final oldController = _vlcController;
     _vlcController = null;
     if (oldController != null) {
       try {
-        // 네이티브 메모리 찌꺼기가 남아서 뻗는 현상 방지
         await oldController.stopRendererScanning();
         await oldController.dispose();
       } catch (_) {}
@@ -550,13 +561,23 @@ class _SafeVlcPlayerState extends State<SafeVlcPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    // 💡 2. 웹 환경일 때 보여줄 대체 UI 설정
+    if (kIsWeb) {
+      return const Center(
+        child: Text(
+          '웹 환경(Chrome)에서는\nVLC 플레이어를 지원하지 않습니다.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
     if (widget.streamUrl.isEmpty || _vlcController == null) {
       return const Center(
         child: Text('스트리밍 연결 대기 중...', style: TextStyle(color: Colors.white)),
       );
     }
 
-    // 💡 Key를 부여하여 컨트롤러가 바뀔 때 위젯 트리를 완전히 새로고침 하도록 강제
     return VlcPlayer(
       key: ValueKey(_vlcController.hashCode),
       controller: _vlcController!,
