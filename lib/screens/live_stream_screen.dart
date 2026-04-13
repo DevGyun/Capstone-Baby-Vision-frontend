@@ -1,105 +1,53 @@
-import 'package:flutter/foundation.dart'; // kIsWeb, defaultTargetPlatform
+import 'package:flutter/foundation.dart'; // kIsWeb 사용
 import 'package:flutter/material.dart';
-import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 import '../config.dart';
 
-// 웹 전용 HLS 플레이어 (조건부 import)
-// 웹에서만 dart:html을 사용하므로 별도 파일로 분리하지 않고
-// kIsWeb 분기 내 HtmlElementView로 처리합니다.
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:ui_web' as ui_web if (dart.library.io) 'stub_ui_web.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html if (dart.library.io) 'stub_html.dart';
+// 💡 앞서 만든 WebRtcPlayer를 임포트합니다.
+import '../widgets/webrtc_player.dart'; 
+
+// 앱 환경에서만 VLC를 쓰기 위한 임포트 (필요 시 유지)
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
+import 'main_screen.dart'; // SafeVlcPlayer를 가져오기 위해 필요할 수 있음
 
 class LiveStreamScreen extends StatefulWidget {
-  const LiveStreamScreen({super.key});
+  // 💡 메인 화면에서 카메라 ID와 이름을 받아오도록 파라미터 추가
+  final String cameraId;
+  final String cameraName;
+
+  const LiveStreamScreen({
+    super.key, 
+    this.cameraId = 'cam_01', 
+    this.cameraName = '메인 게이트 카메라 01'
+  });
 
   @override
   State<LiveStreamScreen> createState() => _LiveStreamScreenState();
 }
 
-class _LiveStreamScreenState extends State<LiveStreamScreen>
-    with SingleTickerProviderStateMixin {
+class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-
-  // 앱 전용 VLC 컨트롤러 (nullable — 웹에서는 null)
-  VlcPlayerController? _vlcController;
-
   bool _isRecording = false;
-  late String _streamUrl;
-
-  // 웹에서 <video> 엘리먼트를 Flutter 뷰에 연결하는 ID
-  static const String _htmlViewId = 'hls-video-player';
 
   @override
   void initState() {
     super.initState();
-    _streamUrl = '${AppConfig.rtspUrl}/camera1';
-
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
-
-    if (kIsWeb) {
-      _initWebPlayer();
-    } else {
-      _initVlcPlayer();
-    }
-  }
-
-  // ── 웹: HLS 플레이어 초기화 ──────────────────────────────────
-  void _initWebPlayer() {
-    // dart:html의 VideoElement을 생성해 HLS 스트림 연결
-    final videoElement = html.VideoElement()
-      ..src = _streamUrl
-      ..autoplay = true
-      ..controls = false // 커스텀 컨트롤 사용
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.objectFit = 'contain'
-      ..style.background = 'black';
-
-    // Flutter Web 렌더러에 HTML 엘리먼트 등록
-    // ignore: undefined_prefixed_name
-    ui_web.platformViewRegistry.registerViewFactory(
-      _htmlViewId,
-      (int viewId) => videoElement,
-    );
-  }
-
-  // ── 앱: VLC RTSP 플레이어 초기화 ─────────────────────────────
-  void _initVlcPlayer() {
-    _vlcController = VlcPlayerController.network(
-      _streamUrl,
-      hwAcc: HwAcc.disabled, // 에뮬레이터 프리징 방지
-      autoPlay: true,
-      options: VlcPlayerOptions(
-        advanced: VlcAdvancedOptions([
-          VlcAdvancedOptions.networkCaching(300),
-        ]),
-      ),
-    );
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _vlcController?.dispose();
+    // WebRtcPlayer 내부에서 자체적으로 연결을 해제하므로 여기선 컨트롤러를 신경 쓸 필요가 없습니다.
     super.dispose();
   }
 
-  // ── 액션 핸들러 ──────────────────────────────────────────────
+  // ── 액션 핸들러 (기존 유지) ──
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(children: [
-          Icon(Icons.camera_alt, color: Colors.white),
-          SizedBox(width: 8),
-          Text('화면이 갤러리에 안전하게 저장되었습니다.'),
-        ]),
-        behavior: SnackBarBehavior.floating,
-      ),
+      const SnackBar(content: Text('화면이 갤러리에 안전하게 저장되었습니다.'), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -107,55 +55,27 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     setState(() => _isRecording = !_isRecording);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(children: [
-          Icon(
-            _isRecording ? Icons.fiber_manual_record : Icons.save_alt,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 8),
-          Text(_isRecording ? '아이의 모습을 녹화하기 시작합니다.' : '녹화가 완료되어 갤러리에 저장되었습니다.'),
-        ]),
+        content: Text(_isRecording ? '녹화를 시작합니다.' : '녹화가 완료되었습니다.'),
         backgroundColor: _isRecording ? Colors.redAccent : Colors.green,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  void _enterPIPMode() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('PIP 모드로 전환합니다. (네이티브 연동 필요)'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  // ── 비디오 영역 위젯 ─────────────────────────────────────────
+  // ── 비디오 영역 (WebRTC + VLC 분기) ──
   Widget _buildVideoArea() {
+    // 💡 환경에 따라 WebRTC 또는 VLC를 호출합니다.
     if (kIsWeb) {
-      // 웹: HtmlElementView로 <video> 태그 렌더링
-      return HtmlElementView(viewType: _htmlViewId);
+      return WebRtcPlayer(
+        cameraId: widget.cameraId,
+        clientId: 'web_client_user',
+      );
+    } else {
+      // 앱 환경 (원한다면 앱도 WebRtcPlayer로 통일 가능)
+      return SafeVlcPlayer(streamUrl: '${AppConfig.rtspUrl}/${widget.cameraId}');
     }
-
-    // 앱: VLC 플레이어
-    return VlcPlayer(
-      controller: _vlcController!,
-      aspectRatio: 16 / 9,
-      placeholder: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: Colors.blueAccent),
-            SizedBox(height: 16),
-            Text('카메라 신호 대기 중...', style: TextStyle(color: Colors.grey, fontSize: 12)),
-          ],
-        ),
-      ),
-    );
   }
 
-  // ── 빌드 ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,40 +83,21 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F172A).withOpacity(0.8),
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          '실시간 CCTV 모니터링',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('실시간 CCTV 모니터링', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          if (!kIsWeb)
-            IconButton(
-              icon: const Icon(Icons.picture_in_picture_alt),
-              tooltip: '백그라운드에서 보기 (PIP)',
-              onPressed: _enterPIPMode,
-            ),
+          // LIVE 깜빡임 애니메이션 (기존 유지)
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
-            ),
+            decoration: BoxDecoration(color: Colors.red.withOpacity(0.2), borderRadius: BorderRadius.circular(16)),
             child: Row(
               children: [
                 FadeTransition(
                   opacity: _animationController,
-                  child: Container(
-                    width: 8, height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.red, shape: BoxShape.circle,
-                    ),
-                  ),
+                  child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
                 ),
                 const SizedBox(width: 4),
-                const Text(
-                  'LIVE',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold),
-                ),
+                const Text('LIVE', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -207,27 +108,26 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // ── 비디오 영역 ──
+              // ── 영상 출력부 ──
               Expanded(
                 child: Stack(
                   children: [
+                    // 1. 실제 영상 렌더러
                     Container(
                       width: double.infinity,
                       height: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _isRecording ? Colors.redAccent : Colors.grey[800]!,
-                          width: _isRecording ? 2 : 1,
-                        ),
+                        border: Border.all(color: _isRecording ? Colors.redAccent : Colors.grey[800]!, width: _isRecording ? 2 : 1),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: _buildVideoArea(),
                       ),
                     ),
-                    // REC 표시
+                    
+                    // 2. REC 아이콘 오버레이
                     if (_isRecording)
                       Positioned(
                         top: 16, right: 16,
@@ -235,10 +135,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                           opacity: _animationController,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
+                            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
                             child: const Row(
                               children: [
                                 Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
@@ -249,87 +146,58 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                           ),
                         ),
                       ),
-                    // 웹 안내 배지
-                    if (kIsWeb)
-                      Positioned(
-                        bottom: 12, left: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'HLS 스트림 (웹)',
-                            style: TextStyle(color: Colors.white70, fontSize: 10),
+
+                    // 💡 3. 메인에서 옮겨온 DANGER ZONE 오버레이
+                    Positioned(
+                      top: 40, left: 60,
+                      child: Container(
+                        width: 150, height: 200, // 구역 크기 임의 지정
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.orangeAccent, width: 2), 
+                          borderRadius: BorderRadius.circular(8)
+                        ),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: Container(
+                            margin: const EdgeInsets.only(top: 4), 
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), 
+                            color: Colors.orangeAccent,
+                            child: const Text('DANGER ZONE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
 
-              // ── 컨트롤 패널 ──
+              // ── 하단 컨트롤 패널 ──
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
                 child: Column(
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.videocam, color: Colors.blueAccent),
-                            SizedBox(width: 12),
-                            Text(
-                              '메인 게이트 카메라 01',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                          ],
-                        ),
                         Row(
                           children: [
-                            const Text('상태: ', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            Icon(Icons.network_wifi, color: Colors.green[400], size: 18),
-                            const SizedBox(width: 4),
-                            Text(
-                              '연결 대기',
-                              style: TextStyle(color: Colors.green[400], fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
+                            const Icon(Icons.videocam, color: Colors.blueAccent),
+                            const SizedBox(width: 12),
+                            // 💡 전달받은 카메라 이름 출력
+                            Text(widget.cameraName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
                       ],
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12.0),
-                      child: Divider(color: Colors.grey, height: 1),
-                    ),
+                    const Padding(padding: EdgeInsets.symmetric(vertical: 12.0), child: Divider(color: Colors.grey, height: 1)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildActionBtn(
-                          icon: Icons.camera_alt_outlined,
-                          label: '화면 캡처',
-                          color: Colors.white,
-                          onTap: _takeSnapshot,
-                        ),
-                        _buildActionBtn(
-                          icon: _isRecording ? Icons.stop_circle : Icons.fiber_manual_record,
-                          label: _isRecording ? '녹화 중지' : '영상 녹화',
-                          color: _isRecording ? Colors.redAccent : Colors.white,
-                          onTap: _toggleRecording,
-                        ),
-                        _buildActionBtn(
-                          icon: Icons.exit_to_app,
-                          label: '종료',
-                          color: Colors.grey[400]!,
-                          onTap: () => Navigator.pop(context),
-                        ),
+                        _buildActionBtn(icon: Icons.camera_alt_outlined, label: '화면 캡처', color: Colors.white, onTap: _takeSnapshot),
+                        _buildActionBtn(icon: _isRecording ? Icons.stop_circle : Icons.fiber_manual_record, label: _isRecording ? '녹화 중지' : '영상 녹화', color: _isRecording ? Colors.redAccent : Colors.white, onTap: _toggleRecording),
+                        _buildActionBtn(icon: Icons.exit_to_app, label: '종료', color: Colors.grey[400]!, onTap: () => Navigator.pop(context)),
                       ],
                     ),
                   ],
@@ -342,12 +210,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     );
   }
 
-  Widget _buildActionBtn({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildActionBtn({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),

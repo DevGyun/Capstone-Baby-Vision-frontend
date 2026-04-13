@@ -173,6 +173,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
+    // 1. 카메라가 없을 때의 예외 처리
     if (cameras.isEmpty) {
       return Container(
         width: double.infinity, height: 200,
@@ -181,139 +182,109 @@ Widget _buildMainVideoCard(ColorScheme colorScheme) {
       );
     }
 
+    // 2. 인덱스 방어 로직
     int safeIndex = _selectedCameraIndex;
-    if (safeIndex >= cameras.length) {
-      safeIndex = 0;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _selectedCameraIndex = 0);
-      });
-    }
+    if (safeIndex >= cameras.length) safeIndex = 0;
 
+    // 3. 💡 에러가 났던 변수 선언부 (이곳에서 선언되어야 아래에서 쓸 수 있습니다)
     final currentCam = cameras[safeIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
-    final String streamUrl = currentCam['stream_url'] ?? '';
-    
-    // 💡 백엔드에서 받아온 카메라 고유 ID를 추출합니다. (키값은 백엔드 응답에 맞게 수정하세요)
     final String cameraId = currentCam['id']?.toString() ?? 'cam_0${safeIndex + 1}'; 
 
+    // 4. 화면 렌더링 시작
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveStreamScreen())),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LiveStreamScreen(
+              cameraId: cameraId,
+              cameraName: camName,
+            ),
+          ),
+        );
+      },
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-            color: Colors.black,
+            color: colorScheme.surfaceContainerHighest,
+            border: Border.all(color: colorScheme.outlineVariant),
             boxShadow: [BoxShadow(color: colorScheme.shadow.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // 💡 핵심 변경 부분: 환경에 따라 플레이어 분기
-                kIsWeb 
-                  ? WebRtcPlayer(
-                      cameraId: cameraId, 
-                      clientId: 'web_client_user', // 추후 AuthProvider에서 유저 ID를 가져와 넣을 수 있습니다.
-                    )
-                  : SafeVlcPlayer(streamUrl: streamUrl),
-
-                // --- 상단 위험 구역 표시 (DANGER ZONE) ---
-                Positioned(
-                  top: 40, left: 60,
-                  child: Container(
-                    width: 100, height: 140,
-                    decoration: BoxDecoration(border: Border.all(color: Colors.orangeAccent, width: 2), borderRadius: BorderRadius.circular(8)),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: Container(
-                        margin: const EdgeInsets.only(top: 4), padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), color: Colors.orangeAccent,
-                        child: const Text('DANGER ZONE', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // --- 중앙 재생 버튼 UI ---
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 12, spreadRadius: 4)]
                       ),
+                      child: Icon(Icons.play_arrow_rounded, size: 40, color: colorScheme.onPrimary),
                     ),
+                    const SizedBox(height: 12),
+                    Text('라이브 화면 보기', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+
+              // --- 상단 위험 구역 활성화 표시 ---
+              Positioned(
+                top: 16, left: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 14),
+                      SizedBox(width: 4),
+                      Text('위험 구역 감지 켜짐', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
+              ),
 
-                // --- 하단 카메라 정보 표시 ---
-                Positioned(
-                  bottom: 12, left: 12, right: 12,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        color: Colors.black.withOpacity(0.4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.videocam, color: Colors.white, size: 16),
-                                const SizedBox(width: 6),
-                                Text('CAM 0${safeIndex + 1} - $camName', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                            Icon(Icons.fullscreen, color: Colors.white.withOpacity(0.8), size: 20)
-                          ],
-                        ),
+              // --- 하단 카메라 정보 표시 ---
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.videocam, color: colorScheme.onSurfaceVariant, size: 16),
+                          const SizedBox(width: 6),
+                          Text('CAM 0${safeIndex + 1} - $camName', style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
                       ),
-                    ),
+                      Icon(Icons.open_in_new, color: colorScheme.primary, size: 16)
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildThumbnailsRow(ColorScheme colorScheme) {
-    // 💡 백엔드에서 받아온 데이터 사용
-    final cameras = context.watch<CameraProvider>().cameras;
-
-    return Row(
-      children: [
-        // 실제 카메라 리스트 렌더링
-        for (int i = 0; i < cameras.length; i++) ...[
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedCameraIndex = i),
-              child: _buildThumbnail('..assets/images/1babyscreen.png', isActive: _selectedCameraIndex == i),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        // 💡 여분 카메라 추가 버튼 (클릭 시 AddCameraScreen으로 이동)
-        Expanded(
-          child: GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddCameraScreen()),
-              );
-            },
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
-                ),
-                child: Icon(Icons.add, color: colorScheme.outline),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildThumbnail(String url, {bool isActive = false}) {
+  Widget _buildThumbnailsRow(String url, {bool isActive = false}) {
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Container(
