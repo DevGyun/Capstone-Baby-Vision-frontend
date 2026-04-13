@@ -5,10 +5,6 @@ import '../config.dart';
 // 💡 앞서 만든 WebRtcPlayer를 임포트합니다.
 import '../widgets/webrtc_player.dart'; 
 
-// 앱 환경에서만 VLC를 쓰기 위한 임포트 (필요 시 유지)
-import 'package:flutter_vlc_player/flutter_vlc_player.dart';
-import 'main_screen.dart'; // SafeVlcPlayer를 가져오기 위해 필요할 수 있음
-
 class LiveStreamScreen extends StatefulWidget {
   // 💡 메인 화면에서 카메라 ID와 이름을 받아오도록 파라미터 추가
   final String cameraId;
@@ -62,18 +58,13 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // ── 비디오 영역 (WebRTC + VLC 분기) ──
+  // ── 비디오 영역 (WebRTC로 완벽 통일!) ──
   Widget _buildVideoArea() {
-    // 💡 환경에 따라 WebRTC 또는 VLC를 호출합니다.
-    if (kIsWeb) {
-      return WebRtcPlayer(
-        cameraId: widget.cameraId,
-        clientId: 'web_client_user',
-      );
-    } else {
-      // 앱 환경 (원한다면 앱도 WebRtcPlayer로 통일 가능)
-      return SafeVlcPlayer(streamUrl: '${AppConfig.rtspUrl}/${widget.cameraId}');
-    }
+    // 💡 이제 웹과 앱 환경 모두 지연 시간 없는 WebRTC 플레이어를 사용합니다.
+    return WebRtcPlayer(
+      cameraId: widget.cameraId,
+      clientId: 'user_client_${DateTime.now().millisecondsSinceEpoch}', // 고유 접속 ID 생성
+    );
   }
 
   @override

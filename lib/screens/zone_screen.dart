@@ -11,11 +11,33 @@ class ZoneScreen extends StatefulWidget {
 
 class _ZoneScreenState extends State<ZoneScreen> {
   int _selectedCameraIndex = 0;
-  
-  // 💡 사용자가 그린 위험 구역(Rect)들을 저장하는 리스트
   List<Rect> _dangerZones = [];
   Offset? _startPoint;
   Offset? _currentPoint;
+  
+  // 💡 로딩 상태를 관리할 변수 추가
+  bool _isRefreshing = false; 
+
+  // 💡 스냅샷 새로고침 액션 메서드
+  Future<void> _refreshSnapshot() async {
+    setState(() => _isRefreshing = true);
+    
+    // TODO: 백엔드 API 연동 시 이곳에 최신 이미지(URL)를 받아오는 로직을 넣습니다.
+    // 현재는 UX 시뮬레이션을 위해 1.2초 대기합니다.
+    await Future.delayed(const Duration(milliseconds: 1200));
+    
+    if (mounted) {
+      setState(() => _isRefreshing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('카메라의 최신 화면을 불러왔습니다.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +62,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
             ),
           ),
 
-          // 카메라 선택 탭
+          // ── 카메라 선택 탭 ──
           if (cameras.isNotEmpty)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -54,6 +76,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
                         _selectedCameraIndex = index;
                         _dangerZones.clear(); // 카메라 변경 시 구역 초기화
                       });
+                      _refreshSnapshot(); // 💡 탭 변경 시 자동으로 최신 화면을 불러옵니다.
                     },
                     child: Container(
                       margin: const EdgeInsets.only(right: 12),
@@ -77,7 +100,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
           
           const SizedBox(height: 20),
 
-          // 💡 스냅샷 이미지 위에서 구역 그리기
+          // ── 스냅샷 이미지 및 그리기 영역 ──
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -88,53 +111,92 @@ class _ZoneScreenState extends State<ZoneScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: GestureDetector(
-                  onPanStart: (details) {
-                    setState(() {
-                      _startPoint = details.localPosition;
-                      _currentPoint = details.localPosition;
-                    });
-                  },
-                  onPanUpdate: (details) {
-                    setState(() {
-                      _currentPoint = details.localPosition;
-                    });
-                  },
-                  onPanEnd: (details) {
-                    if (_startPoint != null && _currentPoint != null) {
-                      setState(() {
-                        _dangerZones.add(Rect.fromPoints(_startPoint!, _currentPoint!));
-                        _startPoint = null;
-                        _currentPoint = null;
-                      });
-                    }
-                  },
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // 1. 카메라 스냅샷 이미지 (라이브 스트림 대신 정지 이미지 사용)
-                      Image.asset(
-                        'assets/images/1babyscreen.png', 
-                        fit: BoxFit.cover,
+                child: Stack(
+                  children: [
+                    // 1. 제스처 드래그 & 배경 이미지
+                    GestureDetector(
+                      // 💡 로딩 중일 때는 드래그를 막습니다.
+                      onPanStart: _isRefreshing ? null : (details) {
+                        setState(() {
+                          _startPoint = details.localPosition;
+                          _currentPoint = details.localPosition;
+                        });
+                      },
+                      onPanUpdate: _isRefreshing ? null : (details) {
+                        setState(() => _currentPoint = details.localPosition);
+                      },
+                      onPanEnd: _isRefreshing ? null : (details) {
+                        if (_startPoint != null && _currentPoint != null) {
+                          setState(() {
+                            _dangerZones.add(Rect.fromPoints(_startPoint!, _currentPoint!));
+                            _startPoint = null;
+                            _currentPoint = null;
+                          });
+                        }
+                      },
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.asset('assets/images/1babyscreen.png', fit: BoxFit.cover),
+                          Container(color: Colors.black.withOpacity(0.3)), // 어두운 오버레이
+                          ..._dangerZones.map((rect) => _buildZoneBox(rect)), // 저장된 구역
+                          if (_startPoint != null && _currentPoint != null)
+                            _buildZoneBox(Rect.fromPoints(_startPoint!, _currentPoint!), isDrawing: true), // 그리는 중인 구역
+                        ],
                       ),
-                      
-                      // 2. 어두운 오버레이 (구역이 더 잘 보이도록)
-                      Container(color: Colors.black.withOpacity(0.3)),
+                    ),
 
-                      // 3. 확정된 위험 구역들 렌더링
-                      ..._dangerZones.map((rect) => _buildZoneBox(rect)),
+                    // 💡 2. 최신 화면 새로고침 버튼 (우측 상단)
+                    if (!_isRefreshing)
+                      Positioned(
+                        top: 12, right: 12,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: _refreshSnapshot,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white24)
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.refresh, color: Colors.white, size: 14),
+                                  SizedBox(width: 6),
+                                  Text('최신 화면', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
 
-                      // 4. 현재 드래그 중인 구역 렌더링
-                      if (_startPoint != null && _currentPoint != null)
-                        _buildZoneBox(Rect.fromPoints(_startPoint!, _currentPoint!), isDrawing: true),
-                    ],
-                  ),
+                    // 💡 3. 로딩 중 오버레이 화면
+                    if (_isRefreshing)
+                      Container(
+                        color: Colors.black87,
+                        child: const Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircularProgressIndicator(color: Colors.blueAccent),
+                              SizedBox(height: 16),
+                              Text('카메라에서 최신 스냅샷을\n불러오는 중입니다...', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
 
-          // 하단 컨트롤 버튼
+          // ── 하단 컨트롤 버튼 ──
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
@@ -142,7 +204,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => setState(() => _dangerZones.clear()),
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(Icons.delete_outline),
                     label: const Text('초기화'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -155,7 +217,6 @@ class _ZoneScreenState extends State<ZoneScreen> {
                   flex: 2,
                   child: FilledButton.icon(
                     onPressed: () {
-                      // TODO: FastAPI 백엔드로 좌표(_dangerZones) 전송 로직 구현
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('위험 구역이 안전하게 저장되었습니다.'), behavior: SnackBarBehavior.floating),
                       );
@@ -171,37 +232,27 @@ class _ZoneScreenState extends State<ZoneScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 80), // 하단 네비게이션 바 공간 확보
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
-  // 그려지는 네모 박스 UI
   Widget _buildZoneBox(Rect rect, {bool isDrawing = false}) {
     return Positioned(
-      left: rect.left,
-      top: rect.top,
-      width: rect.width,
-      height: rect.height,
+      left: rect.left, top: rect.top, width: rect.width, height: rect.height,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.orangeAccent.withOpacity(0.3),
-          border: Border.all(
-            color: isDrawing ? Colors.white : Colors.orangeAccent,
-            width: 2,
-            style: isDrawing ? BorderStyle.solid : BorderStyle.solid, // 드래그 중일 땐 흰색 선
+          border: Border.all(color: isDrawing ? Colors.white : Colors.orangeAccent, width: 2),
+        ),
+        child: isDrawing ? null : const Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: EdgeInsets.all(4.0),
+            child: Text('DANGER', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
           ),
         ),
-        child: isDrawing 
-            ? null 
-            : const Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: EdgeInsets.all(4.0),
-                  child: Text('DANGER', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                ),
-              ),
       ),
     );
   }

@@ -44,26 +44,30 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+Widget build(BuildContext context) {
+  final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: Colors.black87, // PC 환경에서 바깥 배경을 어둡게
-      // 💡 [웹 비율 고정 기능] 화면 가운데에 모바일 크기(최대 너비 480)로 앱을 띄웁니다.
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            color: colorScheme.surface, // 실제 모바일 앱의 배경색
-            child: Stack(
-              children: [
-                IndexedStack(
-                  index: _selectedIndex,
-                  children: [
-                    _buildMonitoringView(colorScheme),
-                    const ZoneScreen(),
-                    const HistoryScreen(),
-                    const SettingsScreen(),
+  return Scaffold(
+    // 1. 브라우저 전체 배경색 (바깥쪽 여백 공간)
+    backgroundColor: Colors.black87, 
+    
+    // 2. 전체를 중앙으로 배치
+    body: Center(
+      child: ConstrainedBox(
+        // 3. 앱의 최대 너비를 스마트폰 크기 정도로 제한
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Container(
+          // 4. 실제 앱의 배경색
+          color: colorScheme.surface, 
+          child: Stack(
+            children: [
+              IndexedStack(
+                index: _selectedIndex,
+                children: [
+                  _buildMonitoringView(colorScheme),
+                  const ZoneScreen(),
+                  const HistoryScreen(),
+                  const SettingsScreen(),
                   ],
                 ),
                 Positioned(
