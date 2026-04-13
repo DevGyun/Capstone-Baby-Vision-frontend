@@ -41,6 +41,43 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _pulseController.dispose();
     super.dispose();
   }
+  @override
+  void _showDeleteConfirmation(BuildContext context, String cameraId, String cameraName) {
+    showDialog(
+      context: context,
+      builder: (childContext) => AlertDialog(
+        title: const Text('카메라 제거', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('"$cameraName" 카메라를 정말 제거하시겠습니까?\n연결된 설정 정보가 모두 삭제됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(childContext),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(childContext); // 다이얼로그 닫기
+              
+              final success = await context.read<CameraProvider>().removeCamera(cameraId);
+              
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('카메라가 성공적으로 제거되었습니다.')),
+                );
+                // 삭제 후 첫 번째 카메라로 선택 변경
+                setState(() => _selectedCameraIndex = 0);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('삭제에 실패했습니다. 다시 시도해주세요.')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('제거', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
@@ -269,7 +306,18 @@ Widget build(BuildContext context) {
                           Text('CAM 0${safeIndex + 1} - $camName', style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
-                      Icon(Icons.open_in_new, color: colorScheme.primary, size: 16)
+                      // 💡 [수정된 부분] 기존 단일 Icon을 Row로 묶고 휴지통 버튼 추가
+                      Row(
+                        children: [
+                          IconButton(
+                            constraints: const BoxConstraints(),
+                            padding: const EdgeInsets.only(right: 12),
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () => _showDeleteConfirmation(context, cameraId, camName),
+                          ),
+                          Icon(Icons.open_in_new, color: colorScheme.primary, size: 16),
+                        ],
+                      )
                     ],
                   ),
                 ),

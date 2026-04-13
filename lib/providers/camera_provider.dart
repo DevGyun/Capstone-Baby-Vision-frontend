@@ -80,4 +80,28 @@ class CameraProvider extends ChangeNotifier {
       debugPrint('목록 로드 에러: $e');
     }
   }
+  Future<bool> removeCamera(String cameraId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken');
+
+    try {
+      final response = await http.delete(
+        Uri.parse('${AppConfig.baseUrl}/cameras/$cameraId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'ngrok-skip-browser-warning': '69420',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        // 서버 삭제 성공 시 로컬 목록에서도 제거
+        _cameras.removeWhere((cam) => cam['id'].toString() == cameraId);
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('카메라 삭제 에러: $e');
+    }
+    return false;
+  }
 }
