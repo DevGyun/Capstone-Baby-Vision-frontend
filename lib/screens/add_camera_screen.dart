@@ -25,22 +25,30 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       return;
     }
 
+    // 💡 [추가] 주소 형식 검증: http:// 나 rtsp:// 가 없으면 기기 IP 추출이 불가능함
+    if (!url.startsWith('rtsp://') && !url.startsWith('http://')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('주소는 반드시 rtsp:// 또는 http:// 로 시작해야 합니다.')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     final provider = context.read<CameraProvider>();
-    final success = await provider.addCamera(name, url);
+    // 💡 [수정] 성공 여부를 상세한 상태 메시지로 반환받도록 변경 (Provider 수정 내용 참고)
+    final resultMessage = await provider.addCamera(name, url);
 
     setState(() => _isSubmitting = false);
 
-    if (success) {
+    if (resultMessage == 'success') {
       ScaffoldMessenger.of(context).showSnackBar(
-        // 💡 [안내 문구 살짝 변경] 기기 연동을 강조
         const SnackBar(content: Text('카메라 등록 및 연동이 완료되었습니다.')),
       );
       Navigator.pop(context); 
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('카메라 추가에 실패했습니다. 다시 시도해주세요.')),
+        SnackBar(content: Text(resultMessage)), // 에러 원인을 화면에 표시
       );
     }
   }

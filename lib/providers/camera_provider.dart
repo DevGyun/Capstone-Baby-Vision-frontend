@@ -9,12 +9,11 @@ class CameraProvider extends ChangeNotifier {
   List<dynamic> get cameras => _cameras;
 
   // 카메라 추가 (POST /cameras)
-  Future<bool> addCamera(String name, String streamUrl) async {
+  Future<String> addCamera(String name, String streamUrl) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('eyeCatchToken');
 
     try {
-      // 1. 기존 기능 유지: 백엔드로 name과 stream_url 전송
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/cameras'),
         headers: {
@@ -24,44 +23,42 @@ class CameraProvider extends ChangeNotifier {
         body: jsonEncode({'name': name, 'stream_url': streamUrl}), 
       );
       
-      if (response.statusCode == 200) {
-        
-        // 💡 [여기서부터 새로 추가된 부분] : 같은 와이파이 기기로 주소 쏴주기
+      if (response.statusCode == 200 || response.statusCode == 201) {
         try {
-          // 1) 백엔드 응답에서 서버가 만들어준 고유 스트림 주소를 추출합니다.
           final responseData = jsonDecode(response.body);
           final serverStreamUrl = responseData['stream_url'] ?? '';
 
-          // 2) 사용자가 앱에 입력한 주소(예: rtsp://192.168.0.55/stream)에서 IP(192.168.0.55)만 빼냅니다.
           String cameraLocalIp = streamUrl;
           if (streamUrl.contains('://')) {
             cameraLocalIp = Uri.parse(streamUrl).host;
           }
 
-          // 3) 카메라 기기(내부 IP)에 서버 스트림 주소를 전달합니다.
-          // (주의: 포트 5000과 /setup-stream은 하드웨어/파이썬 담당자와 협의해 맞추시면 됩니다!)
-          await http.post(
+          // 💡 타임아웃 처리는 잘 되어있으나, 에러 시 밖으로 던지게 수정
+          final localResponse = await http.post(
             Uri.parse('http://$cameraLocalIp:5000/setup-stream'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'server_url': serverStreamUrl // 카메라가 송출해야 할 메인 서버 주소
-            }),
-          ).timeout(const Duration(seconds: 5)); // 무한 로딩 방지용 5초 타임아웃
+            body: jsonEncode({'server_url': serverStreamUrl}),
+          ).timeout(const Duration(seconds: 5)); 
           
-          debugPrint('로컬 카메라 기기로 주소 전송 성공!');
-        } catch (localError) {
-          debugPrint('로컬 카메라 통신 에러 (백엔드 등록은 성공함): $localError');
-          // 내부망 연결이 불안정해도 서버 등록은 되었으므로 아래 과정(fetchCameras)은 정상 진행시킵니다.
-        }
-        // 💡 [추가된 부분 끝]
+          if(localResponse.statusCode != 200) {
+            throw Exception('카메라 기기 응답 오류');
+          }
 
-        await fetchCameras(); 
-        return true;
+          debugPrint('로컬 카메라 기기로 주소 전송 성공!');
+          await fetchCameras(); 
+          return 'success';
+
+        } catch (localError) {
+          debugPrint('로컬 카메라 통신 에러: $localError');
+          await fetchCameras(); // 백엔드 등록은 됐으니 목록은 갱신
+          return '백엔드 등록은 성공했으나, 카메라 기기($streamUrl)와 통신할 수 없습니다. 기기 전원을 확인하세요.';
+        }
       }
+      return '서버에 카메라를 등록하는데 실패했습니다. (상태코드: ${response.statusCode})';
     } catch (e) {
-      debugPrint('카메라 추가 에러: $e');
+      debugPrint('카메라 추가 네트워크 에러: $e');
+      return '서버와의 네트워크 연결에 실패했습니다.';
     }
-    return false;
   }
 
   // 카메라 목록 가져오기 (기존 기능 그대로)

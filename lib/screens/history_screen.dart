@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/log_provider.dart';
+import 'incident_details_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -156,11 +157,16 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
             Text(log.description, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(log.time, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-            const SizedBox(height: 16),
+           const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, '/incident-details'),
+                onPressed: () => Navigator.push(
+                  context, 
+                  MaterialPageRoute(
+                    builder: (context) => IncidentDetailsScreen(log: log),
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,

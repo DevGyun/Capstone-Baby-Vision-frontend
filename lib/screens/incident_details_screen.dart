@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../providers/log_provider.dart'; // 💡 데이터 구조체 임포트
 
 class IncidentDetailsScreen extends StatelessWidget {
-  const IncidentDetailsScreen({super.key});
+  final IncidentLog log; // 💡 선택된 로그 데이터를 받아올 변수
+
+  const IncidentDetailsScreen({super.key, required this.log});
 
   @override
   Widget build(BuildContext context) {
@@ -27,27 +30,26 @@ class IncidentDetailsScreen extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: Image.network(
-                    'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=800&auto=format&fit=crop&q=80',
-                    width: double.infinity,
-                    height: 220,
-                    fit: BoxFit.cover,
-                    color: Colors.black.withOpacity(0.2), // 어두운 오버레이
-                    colorBlendMode: BlendMode.darken,
-                  ),
+                  // 💡 [수정] http와 로컬 assets 이미지를 모두 렌더링할 수 있도록 분기 처리
+                  child: log.imageUrl.startsWith('http')
+                    ? Image.network(
+                        log.imageUrl,
+                        width: double.infinity, height: 220, fit: BoxFit.cover,
+                        color: Colors.black.withOpacity(0.2), colorBlendMode: BlendMode.darken,
+                      )
+                    : Image.asset(
+                        log.imageUrl,
+                        width: double.infinity, height: 220, fit: BoxFit.cover,
+                        color: Colors.black.withOpacity(0.2), colorBlendMode: BlendMode.darken,
+                      ),
                 ),
-                // 위험 경고 아이콘 (웹의 애니메이션 효과 대체)
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.redAccent, width: 4),
+                // 위험 경고 아이콘 (Alert 상태일 때만 표시)
+                if (log.isAlert)
+                  Container(
+                    width: 80, height: 80,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: log.iconColor, width: 4)),
+                    child: Center(child: Icon(log.icon, color: log.iconColor, size: 40)),
                   ),
-                  child: const Center(
-                    child: Icon(Icons.warning, color: Colors.redAccent, size: 40),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -58,28 +60,30 @@ class IncidentDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(16)),
-                    child: Text('알림: 주의 필요', style: TextStyle(color: Colors.red[800], fontSize: 12, fontWeight: FontWeight.bold)),
+                    decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                    // 💡 [수정] 실제 로그의 데이터 바인딩
+                    child: Text(
+                      log.isAlert ? '알림: 주의 필요' : '일반 시스템 기록', 
+                      style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold)
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('계단 위험 구역 접근', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(log.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Text('감지 시간: 오후 5:45:12', style: TextStyle(color: Colors.grey)),
+                  Text('감지 시간: ${log.time}', style: const TextStyle(color: Colors.grey)),
                   const SizedBox(height: 24),
                   const Text('상세 내용', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  const Text(
-                    '설정된 위험 구역(계단 주변)에서 아이의 움직임이 감지되었습니다. 혹시 모를 안전사고를 예방하기 위해 보호자님의 실시간 확인이 필요합니다.',
-                    style: TextStyle(height: 1.5, color: Colors.black87),
+                  Text(
+                    log.description,
+                    style: const TextStyle(height: 1.5, color: Colors.black87),
                   ),
                 ],
               ),

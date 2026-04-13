@@ -9,6 +9,7 @@ import 'zone_screen.dart';
 import 'settings_screen.dart';
 import 'history_screen.dart';
 import 'live_stream_screen.dart';
+import 'incident_details_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -289,8 +290,12 @@ Widget build(BuildContext context) {
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _selectedCameraIndex = i),
-              // 💡 파일 경로 오타 (..assets -> assets) 수정 완료
-              child: _buildThumbnail('assets/images/1babyscreen.png', isActive: _selectedCameraIndex == i),
+              // 💡 하드코딩 제거: 백엔드에서 주는 썸네일이 있으면 쓰고, 없으면 기본 이미지 사용. 이름도 넘김
+              child: _buildThumbnail(
+                cameras[i]['thumbnail_url'] ?? 'assets/images/1babyscreen.png', 
+                isActive: _selectedCameraIndex == i,
+                cameraName: cameras[i]['name'] ?? 'CAM 0${i+1}',
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -315,7 +320,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildThumbnail(String url, {bool isActive = false}) {
+  Widget _buildThumbnail(String url, {bool isActive = false, String cameraName = ''}) {
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Container(
@@ -323,11 +328,29 @@ Widget build(BuildContext context) {
           borderRadius: BorderRadius.circular(12),
           border: isActive ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3) : null,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(isActive ? 9 : 12),
-          child: url.startsWith('http')
-              ? Image.network(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken)
-              : Image.asset(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(isActive ? 9 : 12),
+              child: url.startsWith('http')
+                  ? Image.network(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken)
+                  : Image.asset(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken),
+            ),
+            // 💡 썸네일 위에 카메라 이름 텍스트 오버레이 추가 (구분용)
+            Positioned(
+              bottom: 4, left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
+                child: Text(
+                  cameraName, 
+                  style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
+          ],
         ),
       ),
     );
@@ -415,33 +438,41 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildLogItem(ColorScheme colorScheme, IncidentLog log) {
-    return Container(
-      margin: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: log.isAlert ? log.iconColor.withOpacity(0.05) : colorScheme.surfaceContainerLow,
-        border: log.isAlert ? Border(left: BorderSide(color: log.iconColor, width: 4)) : null,
-        borderRadius: BorderRadius.circular(16),
+Widget _buildLogItem(ColorScheme colorScheme, IncidentLog log) {
+    return GestureDetector(
+      // 💡 [추가] 터치 시 상세 화면으로 이동
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => IncidentDetailsScreen(log: log)),
       ),
-      child: Row(
-        children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(log.icon, color: log.iconColor, size: 20)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text(log.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: log.iconColor)),
-                  Text(log.time, style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
-                ]),
-                const SizedBox(height: 4),
-                Text(log.description, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          )
-        ],
+      behavior: HitTestBehavior.opaque, // 터치 영역 확장
+      child: Container(
+        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: log.isAlert ? log.iconColor.withOpacity(0.05) : colorScheme.surfaceContainerLow,
+          border: log.isAlert ? Border(left: BorderSide(color: log.iconColor, width: 4)) : null,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(log.icon, color: log.iconColor, size: 20)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Text(log.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: log.iconColor)),
+                    Text(log.time, style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(log.description, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
