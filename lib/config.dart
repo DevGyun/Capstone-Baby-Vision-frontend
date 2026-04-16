@@ -24,18 +24,6 @@ class AppConfig {
       return 'ws://211.243.47.179:8000';
     }
   }
-
-  // 💡 WebRTC 송출용 주소 (MediaMTX)
-  static String get webRtcUrl {
-    if (kIsWeb) {
-      return 'http://211.243.47.179:8554';
-    } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8554';
-    } else {
-      return 'http://211.243.47.179:8554';
-    }
-  }
-
   // 앱 내 영상 재생용 HLS 주소 (MediaMTX)
   // RTSP보다 플러터 앱에서 더 안정적으로 재생됩니다.
   static String get hlsUrl {

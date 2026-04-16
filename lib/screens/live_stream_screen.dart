@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart'; // 💡 추가된 비디오 플레이어 임포트
-import '../config.dart';
+import '../widgets/hls_player.dart'; // 💡 새로 만든 HLS 위젯 임포트
 
 class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
   final String cameraName;
-  final String streamUrl; // 💡 HLS 주소를 받기 위해 추가된 변수
+  final String streamUrl; 
 
   const LiveStreamScreen({
     super.key, 
     required this.cameraId, 
     required this.cameraName,
-    required this.streamUrl, // 필수 파라미터로 설정
+    required this.streamUrl, 
   });
 
   @override
@@ -21,9 +20,6 @@ class LiveStreamScreen extends StatefulWidget {
 class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   bool _isRecording = false;
-  
-  // 💡 비디오 플레이어 컨트롤러 선언
-  VideoPlayerController? _videoController;
 
   @override
   void initState() {
@@ -32,23 +28,15 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
-
-    // 💡 전달받은 URL로 비디오 컨트롤러 초기화 및 자동 재생
-    _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.streamUrl))
-      ..initialize().then((_) {
-        setState(() {}); // 준비가 완료되면 화면 갱신
-        _videoController?.play();
-      });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    _videoController?.dispose(); // 💡 메모리 누수를 막기 위해 컨트롤러 해제
     super.dispose();
   }
 
-  // ── 액션 핸들러 (기존 유지) ──
+  // ── 액션 핸들러 ──
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('화면이 갤러리에 안전하게 저장되었습니다.'), behavior: SnackBarBehavior.floating),
@@ -66,35 +54,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     );
   }
 
-  // ── 비디오 영역 (WebRTC로 완벽 통일!) ──
-  // 💡 WebRtcPlayer 대신 VideoPlayer를 반환하도록 수정
-  Widget _buildVideoArea() {
-    if (_videoController != null && _videoController!.value.isInitialized) {
-      return SizedBox.expand(
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: _videoController!.value.size.width,
-            height: _videoController!.value.size.height,
-            child: VideoPlayer(_videoController!),
-          ),
-        ),
-      );
-    } else {
-      // 영상을 불러오는 동안 보여줄 로딩 화면
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: Colors.blueAccent),
-            SizedBox(height: 16),
-            Text('HLS 영상 스트림을 불러오는 중...', style: TextStyle(color: Colors.white)),
-          ],
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,7 +63,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('실시간 CCTV 모니터링', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          // LIVE 깜빡임 애니메이션 (기존 유지)
+          // LIVE 깜빡임 애니메이션
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -131,7 +90,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
               Expanded(
                 child: Stack(
                   children: [
-                    // 1. 실제 영상 렌더러
+                    // 1. 실제 영상 렌더러 (HLS)
                     Container(
                       width: double.infinity,
                       height: double.infinity,
@@ -142,7 +101,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: _buildVideoArea(),
+                        child: HlsPlayer(streamUrl: widget.streamUrl), // 💡 HLS 위젯 적용
                       ),
                     ),
                     
@@ -166,11 +125,11 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                         ),
                       ),
 
-                    // 💡 3. 메인에서 옮겨온 DANGER ZONE 오버레이
+                    // 3. DANGER ZONE 오버레이
                     Positioned(
                       top: 40, left: 60,
                       child: Container(
-                        width: 150, height: 200, // 구역 크기 임의 지정
+                        width: 150, height: 200,
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.orangeAccent, width: 2), 
                           borderRadius: BorderRadius.circular(8)
@@ -204,7 +163,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                           children: [
                             const Icon(Icons.videocam, color: Colors.blueAccent),
                             const SizedBox(width: 12),
-                            // 💡 전달받은 카메라 이름 출력
                             Text(widget.cameraName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                           ],
                         ),
