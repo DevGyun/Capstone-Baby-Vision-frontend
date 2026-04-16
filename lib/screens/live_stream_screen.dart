@@ -157,17 +157,16 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                 child: Column(
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.videocam, color: Colors.blueAccent),
-                            const SizedBox(width: 12),
-                            Text(widget.cameraName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                          ],
-                        ),
-                      ],
-                    ),
+  children: [
+    Icon(Icons.videocam),
+    Expanded( // 💡 공간이 부족하면 자동으로 줄여주는 위젯으로 감싸기
+      child: Text(
+        '카메라 이름이 너무 깁니다', 
+        overflow: TextOverflow.ellipsis, // 글자가 넘치면 '...'으로 표시
+      ),
+    ),
+  ],
+),
                     const Padding(padding: EdgeInsets.symmetric(vertical: 12.0), child: Divider(color: Colors.grey, height: 1)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
