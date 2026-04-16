@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 클립보드 복사를 위해 추가
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // 토큰 접근을 위해 추가
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
 
@@ -21,7 +23,29 @@ class SettingsScreen extends StatelessWidget {
       });
     }
 
+    // 💡 [추가] 브릿지 연동용 토큰 클립보드 복사 함수
+    void copyToken() async {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('eyeCatchToken');
+      
+      if (token != null && token.isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: token));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('브릿지 연동 토큰이 클립보드에 복사되었습니다.')),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('토큰을 찾을 수 없습니다. 다시 로그인해주세요.')),
+          );
+        }
+      }
+    }
+
     void showPasswordCheckDialog() {
+      // (기존 코드와 동일하므로 생략 없이 유지)
       final passwordController = TextEditingController();
       showDialog(
         context: context,
@@ -127,10 +151,16 @@ class SettingsScreen extends StatelessWidget {
             _buildListTile(context, '비상 연락처 (이메일)', settings.profileEmail, Icons.chevron_right),
             
             const SizedBox(height: 24),
+            
+            // 💡 [추가] 기기 연동 섹션 추가
+            const Text('기기 연동', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            _buildListTile(context, '브릿지 연동 토큰 복사', '카메라 기기 최초 설정 시 필요합니다', Icons.copy, onTap: copyToken),
+
+            const SizedBox(height: 24),
             const Text('아이 안심 환경 설정', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             
-            // 프로바이더와 직접 연동된 스위치들
             _buildToggleTile(
               context, '아이 활동 알림', '위험 구역 접근 및 울음소리 감지 시 즉시 알림', Icons.notifications_active,
               settings.isAlertOn, (val) => context.read<SettingsProvider>().toggleAlert(val),
@@ -160,6 +190,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildToggleTile(BuildContext context, String title, String subtitle, IconData icon, bool value, ValueChanged<bool> onChanged) {
+    // 기존 코드 유지
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -179,6 +210,7 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
+// ProfileEditScreen 클래스는 기존 내용과 동일하게 유지하시면 됩니다.
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
 
