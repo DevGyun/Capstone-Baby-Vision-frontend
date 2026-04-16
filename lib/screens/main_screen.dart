@@ -336,7 +336,7 @@ Widget build(BuildContext context) {
     );
   }
 
-  Widget _buildThumbnailsRow(ColorScheme colorScheme) {
+Widget _buildThumbnailsRow(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
     return Row(
@@ -358,15 +358,11 @@ Widget build(BuildContext context) {
         Expanded(
           child: GestureDetector(
             onTap: () => Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (context) => LiveStreamScreen(
-      cameraId: camera['id'].toString(),
-      cameraName: camera['name'],
-      streamUrl: camera['stream_url'], // 💡 서버에서 받아온 HLS 주소 전달
-    ),
-  ),
-),
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AddCameraScreen(),
+              ),
+            ),
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
