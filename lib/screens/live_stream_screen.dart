@@ -1,19 +1,17 @@
-import 'package:flutter/foundation.dart'; // kIsWeb 사용
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart'; // 💡 추가된 비디오 플레이어 임포트
 import '../config.dart';
 
-// 💡 앞서 만든 WebRtcPlayer를 임포트합니다.
-import '../widgets/webrtc_player.dart'; 
-
 class LiveStreamScreen extends StatefulWidget {
-  // 💡 메인 화면에서 카메라 ID와 이름을 받아오도록 파라미터 추가
   final String cameraId;
   final String cameraName;
+  final String streamUrl; // 💡 HLS 주소를 받기 위해 추가된 변수
 
   const LiveStreamScreen({
     super.key, 
-    this.cameraId = 'cam_01', 
-    this.cameraName = '메인 게이트 카메라 01'
+    required this.cameraId, 
+    required this.cameraName,
+    required this.streamUrl, // 필수 파라미터로 설정
   });
 
   @override
@@ -23,6 +21,9 @@ class LiveStreamScreen extends StatefulWidget {
 class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   bool _isRecording = false;
+  
+  // 💡 비디오 플레이어 컨트롤러 선언
+  VideoPlayerController? _videoController;
 
   @override
   void initState() {
@@ -31,12 +32,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
       vsync: this,
       duration: const Duration(seconds: 1),
     )..repeat(reverse: true);
+
+    // 💡 전달받은 URL로 비디오 컨트롤러 초기화 및 자동 재생
+    _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.streamUrl))
+      ..initialize().then((_) {
+        setState(() {}); // 준비가 완료되면 화면 갱신
+        _videoController?.play();
+      });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
-    // WebRtcPlayer 내부에서 자체적으로 연결을 해제하므로 여기선 컨트롤러를 신경 쓸 필요가 없습니다.
+    _videoController?.dispose(); // 💡 메모리 누수를 막기 위해 컨트롤러 해제
     super.dispose();
   }
 
@@ -59,12 +67,32 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
   }
 
   // ── 비디오 영역 (WebRTC로 완벽 통일!) ──
+  // 💡 WebRtcPlayer 대신 VideoPlayer를 반환하도록 수정
   Widget _buildVideoArea() {
-    // 💡 이제 웹과 앱 환경 모두 지연 시간 없는 WebRTC 플레이어를 사용합니다.
-    return WebRtcPlayer(
-      cameraId: widget.cameraId,
-      clientId: 'user_client_${DateTime.now().millisecondsSinceEpoch}', // 고유 접속 ID 생성
-    );
+    if (_videoController != null && _videoController!.value.isInitialized) {
+      return SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: _videoController!.value.size.width,
+            height: _videoController!.value.size.height,
+            child: VideoPlayer(_videoController!),
+          ),
+        ),
+      );
+    } else {
+      // 영상을 불러오는 동안 보여줄 로딩 화면
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.blueAccent),
+            SizedBox(height: 16),
+            Text('HLS 영상 스트림을 불러오는 중...', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      );
+    }
   }
 
   @override

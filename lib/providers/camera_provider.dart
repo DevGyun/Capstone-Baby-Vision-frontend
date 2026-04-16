@@ -33,6 +33,13 @@ class CameraProvider extends ChangeNotifier {
             cameraLocalIp = Uri.parse(streamUrl).host;
           }
 
+          // 👇👇👇 추가할 부분: 입력 주소가 이미 HLS 서버 주소인 경우 로컬 기기 셋업을 우회합니다. 👇👇👇
+          if (cameraLocalIp == '211.243.47.179' || streamUrl.contains('8888')) {
+            debugPrint('이미 스트리밍 중인 주소 확인됨. 로컬 기기 셋업 생략.');
+            await fetchCameras(); 
+            return 'success';
+          }
+
           // 💡 타임아웃 처리는 잘 되어있으나, 에러 시 밖으로 던지게 수정
           final localResponse = await http.post(
             Uri.parse('http://$cameraLocalIp:5000/setup-stream'),

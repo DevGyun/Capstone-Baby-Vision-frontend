@@ -235,10 +235,17 @@ Widget build(BuildContext context) {
     final currentCam = cameras[safeIndex];
     final String camName = currentCam['name'] ?? '알 수 없는 카메라';
     final String cameraId = currentCam['id']?.toString() ?? 'cam_0${safeIndex + 1}'; 
+    
+    // 💡 [여기가 추가되어야 합니다] currentCam 변수에서 streamUrl을 꺼냅니다.
+    final String streamUrl = currentCam['stream_url'] ?? ''; 
 
     return GestureDetector(
-      // 💡 여기서 라이브 스크린으로 카메라 ID를 넘깁니다.
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveStreamScreen(cameraId: cameraId, cameraName: camName))),
+      // 💡 [수정된 부분] camera가 아닌 위에서 정의한 변수들을 전달합니다.
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveStreamScreen(
+        cameraId: cameraId, 
+        cameraName: camName,
+        streamUrl: streamUrl, // 💡 새로 추가된 HLS 주소 전달
+      ))),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Container(
@@ -350,7 +357,16 @@ Widget build(BuildContext context) {
         ],
         Expanded(
           child: GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddCameraScreen())),
+            onTap: () => Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => LiveStreamScreen(
+      cameraId: camera['id'].toString(),
+      cameraName: camera['name'],
+      streamUrl: camera['stream_url'], // 💡 서버에서 받아온 HLS 주소 전달
+    ),
+  ),
+),
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
