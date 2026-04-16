@@ -19,7 +19,7 @@ class SettingsProvider extends ChangeNotifier {
     loadSettings();
   }
 
-  // 내부 저장소에서 사용자 정보 및 세팅 불러오기
+  // 내부 저장소에서 사용자 정보 및 세팅 불러오기 (초기값 연동 완벽함)
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final userDataString = prefs.getString('eyeCatchUser');
@@ -57,7 +57,10 @@ class SettingsProvider extends ChangeNotifier {
     try {
       final response = await http.post(
         Uri.parse('${AppConfig.baseUrl}/users/login'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': '69420', // ✅ ngrok 우회 헤더 추가
+        },
         body: jsonEncode({'email': _profileEmail, 'password': password}),
       );
 
@@ -104,6 +107,7 @@ class SettingsProvider extends ChangeNotifier {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
+          'ngrok-skip-browser-warning': '69420', // ✅ ngrok 우회 헤더 추가
         },
         body: jsonEncode(updateData),
       );
@@ -114,7 +118,7 @@ class SettingsProvider extends ChangeNotifier {
           final userDataString = prefs.getString('eyeCatchUser');
           if (userDataString != null) {
             final userData = jsonDecode(userDataString) as Map<String, dynamic>;
-            userData['name'] = newName;
+            userData['name'] = newName; // 새 이름으로 덮어쓰기
             await prefs.setString('eyeCatchUser', jsonEncode(userData));
             _profileName = newName;
           }
