@@ -20,7 +20,7 @@ class CameraProvider extends ChangeNotifier {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'name': name, 'stream_url': streamUrl}), 
+        body: jsonEncode({'name': name, 'stream_url': streamUrl}),
       );
       
       if (response.statusCode == 200 || response.statusCode == 201) {

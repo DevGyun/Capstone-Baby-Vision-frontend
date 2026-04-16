@@ -10,6 +10,7 @@ import 'settings_screen.dart';
 import 'history_screen.dart';
 import 'live_stream_screen.dart';
 import 'incident_details_screen.dart';
+import '../widgets/hls_player.dart'; // 💡 HLS 플레이어 위젯 임포트
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
