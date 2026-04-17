@@ -8,7 +8,7 @@ class AppConfig {
       return 'http://211.243.47.179:8000'; // 웹에서는 ngrok 주소로 대체됩니다.
     } else if (Platform.isAndroid) {
       // 안드로이드 에뮬레이터에서 호스트(내 컴퓨터)의 localhost에 접속하기 위한 주소입니다.
-      return 'http://10.0.2.2:8000'; 
+      return 'http://211.243.47.179:8000'; 
     } else {
       return 'http://211.243.47.179:8000'; 
     }
@@ -19,7 +19,7 @@ class AppConfig {
     if (kIsWeb) {
       return 'wss://211.243.47.179';
     } else if (Platform.isAndroid) {
-      return 'ws://10.0.2.2:8000';
+      return 'ws://211.243.47.179:8000';
     } else {
       return 'ws://211.243.47.179:8000';
     }
@@ -30,7 +30,7 @@ class AppConfig {
     if (kIsWeb) {
       return 'http://211.243.47.179:8888';
     } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2:8888';
+      return 'http://211.243.47.179:8888';
     } else {
       return 'http://211.243.47.179:8888';
     }
