@@ -17,8 +17,13 @@ dependencies:
   provider: ^6.1.5+1
   # 💡 무거운 flutter_vlc_player 패키지 삭제 완료
   flutter_launcher_icons: ^0.13.1
-  flutter_secure_storage: ^10.0.0   # 시그널링 웹소켓 통신용
+  flutter_secure_storage: ^10.0.0   # 암호화 저장소용
   video_player: ^2.11.1
+  
+  # 👇 아래 두 가지 패키지를 꼭 추가해 주세요! 👇
+  flutter_webrtc: ^1.4.1           # WebRTC 실시간 영상 통신
+  web_socket_channel: ^3.0.1        # 시그널링 서버 연결용 웹소켓
+
   #firebase_core: ^2.24.2
   #firebase_messaging: ^14.7.9
   #flutter_local_notifications: ^17.1.2
