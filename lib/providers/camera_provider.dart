@@ -8,8 +8,38 @@ class CameraProvider extends ChangeNotifier {
   List<dynamic> _cameras = [];
   List<dynamic> get cameras => _cameras;
 
- // 카메라 추가 (POST /cameras) - name만 전달받도록 수정
-  Future<String> addCamera(String name) async {
+  // [추가] 등록 대기 중인 브릿지 목록 상태 관리
+  List<dynamic> _pendingBridges = [];
+  List<dynamic> get pendingBridges => _pendingBridges;
+
+  // [추가] 미등록 브릿지 목록 가져오기 (GET /bridges/pending)
+  Future<void> fetchPendingBridges() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken');
+
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/bridges/pending'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        _pendingBridges = jsonDecode(response.body);
+        notifyListeners();
+      } else {
+        debugPrint('미등록 브릿지 목록 로드 실패: 상태 코드 ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('미등록 브릿지 목록 로드 에러: $e');
+    }
+  }
+
+  // [수정] 카메라 추가 (POST /cameras) - name과 bridgeId 전달
+  // 참고: 백엔드 DB 구조상 ID가 숫자일 확률이 높아 bridgeId를 int로 받도록 설정했습니다.
+  Future<String> addCamera(String name, int bridgeId) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('eyeCatchToken');
 
@@ -20,12 +50,17 @@ class CameraProvider extends ChangeNotifier {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'name': name}), // body에서 stream_url 제거
+        body: jsonEncode({
+          'name': name,
+          'bridge_id': bridgeId, // [추가] 서버로 브릿지 ID 전달
+        }), 
       );
       
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // 백엔드 등록 성공 시, 복잡한 로컬 기기 연동 과정 없이 바로 목록 새로고침
+        // 등록 성공 시 카메라 목록 새로고침
         await fetchCameras(); 
+        // 등록된 브릿지가 대기 목록에서 빠지도록 대기 목록도 새로고침
+        await fetchPendingBridges();
         return 'success';
       }
       return '서버 등록 실패: 상태 코드 ${response.statusCode}';
