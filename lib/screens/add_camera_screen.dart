@@ -1,181 +1,194 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../providers/camera_provider.dart';
 
 class AddCameraScreen extends StatefulWidget {
-  const AddCameraScreen({super.key});
-
   @override
-  State<AddCameraScreen> createState() => _AddCameraScreenState();
+  _AddCameraScreenState createState() => _AddCameraScreenState();
 }
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
+  bool _isScanning = false;
+  String? _bridgeId;
   final TextEditingController _nameController = TextEditingController();
-  int? _selectedBridgeId; // 선택된 브릿지 ID 저장
-  bool _isSubmitting = false;
+
+  // TODO: 차훈님과 협의하여 브릿지(C++) 측에 설정된 실제 UUID로 변경해야 합니다.
+  final String SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0";
+  final String CHARACTERISTIC_UUID = "abcdef01-1234-5678-1234-56789abcdef0";
 
   @override
   void initState() {
     super.initState();
-    // 화면 초기화 시 미등록 브릿지 목록 로드
-    Future.microtask(() =>
-        context.read<CameraProvider>().fetchPendingBridges());
+    _startBleScan();
   }
 
-  void _submit() async {
-    final name = _nameController.text.trim();
+  Future<void> _startBleScan() async {
+    // 1. 권한 요청
+    Map<Permission, PermissionStatus> statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.location,
+    ].request();
 
-    if (_selectedBridgeId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('등록할 기기를 선택해주세요.')),
-      );
+    if (statuses[Permission.bluetoothScan]!.isDenied ||
+        statuses[Permission.location]!.isDenied) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('블루투스 및 위치 권한이 필요합니다.')));
+      }
       return;
     }
 
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('카메라 이름을 입력해주세요.')),
-      );
-      return;
+    setState(() {
+      _isScanning = true;
+    });
+
+    // 2. BLE 스캔 시작
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+
+    FlutterBluePlus.scanResults.listen((results) async {
+      for (ScanResult r in results) {
+        // 브릿지의 Bluetooth Advertising 이름 필터링 (예: "BabyVision")
+        if (r.device.platformName.startsWith("BabyVision")) {
+          await FlutterBluePlus.stopScan();
+          _connectToDevice(r.device);
+          break;
+        }
+      }
+    });
+
+    // 스캔 상태 감지하여 UI 업데이트
+    FlutterBluePlus.isScanning.listen((isScanning) {
+      if (!isScanning && mounted) {
+        setState(() {
+          _isScanning = false;
+        });
+      }
+    });
+  }
+
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    try {
+      // 3. 기기 연결
+      await device.connect();
+      
+      // 4. 서비스 및 특성(Characteristic) 탐색
+      List<BluetoothService> services = await device.discoverServices();
+      
+      for (BluetoothService service in services) {
+        if (service.uuid.toString() == SERVICE_UUID) {
+          for (BluetoothCharacteristic c in service.characteristics) {
+            if (c.uuid.toString() == CHARACTERISTIC_UUID) {
+              // 5. 브릿지 아이디 읽어오기
+              List<int> value = await c.read();
+              String bridgeId = String.fromCharCodes(value);
+              
+              if (mounted) {
+                setState(() {
+                  _bridgeId = bridgeId;
+                });
+              }
+              
+              // 정보 획득 후 즉시 연결 해제 (배터리 및 리소스 절약)
+              await device.disconnect();
+              return;
+            }
+          }
+        }
+      }
+      await device.disconnect();
+    } catch (e) {
+      print("BLE 연결 에러: $e");
     }
+  }
 
-    setState(() => _isSubmitting = true);
+  void _registerCamera() async {
+    if (_nameController.text.isEmpty || _bridgeId == null) return;
 
-    final provider = context.read<CameraProvider>();
-    // 선택된 브릿지 ID와 함께 이름 전달
-    final resultMessage = await provider.addCamera(name, _selectedBridgeId!);
+    // 6. 획득한 정보로 서버에 POST 요청
+    final cameraProvider = Provider.of<CameraProvider>(context, listen: false);
+    bool success = await cameraProvider.registerCamera(_nameController.text, _bridgeId!);
 
-    setState(() => _isSubmitting = false);
-
-    if (resultMessage == 'success') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('카메라 등록이 완료되었습니다.')),
-      );
-      Navigator.pop(context); 
+    if (success && mounted) {
+      // 등록 성공 시 라이브 스트리밍 화면으로 이동
+      Navigator.pushReplacementNamed(context, '/live_stream'); 
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resultMessage)),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('카메라 등록에 실패했습니다. 서버 상태를 확인해주세요.')));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final cameraProvider = context.watch<CameraProvider>();
-    final pendingBridges = cameraProvider.pendingBridges;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('새 카메라 추가', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => cameraProvider.fetchPendingBridges(),
-            tooltip: '기기 목록 새로고침',
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
+      appBar: AppBar(title: const Text('브릿지 카메라 등록')),
+      body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              '새로운 기기를\n등록합니다.',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, height: 1.3),
-            ),
-            const SizedBox(height: 32),
+            // 앱 내 로컬 에셋 이미지 활용
+            Image.asset('assets/images/1babyscreen.png', height: 150),
+            const SizedBox(height: 30),
             
-            // 1. 브릿지 선택 UI
-            const Text('1. 연결할 기기 선택', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            if (pendingBridges.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.errorContainer.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
+            if (_bridgeId == null) ...[
+              if (_isScanning) ...[
+                const Center(child: CircularProgressIndicator()),
+                const SizedBox(height: 20),
+                const Text(
+                  '주변의 Baby Vision 브릿지를 찾고 있습니다...\n스마트폰을 브릿지 가까이 가져가 주세요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: colorScheme.error),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Text(
-                        '연결 대기 중인 기기가 없습니다.\n브릿지 프로그램이 실행 중인지 확인해주세요.',
-                        style: TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  ],
+              ] else ...[
+                const Text(
+                  '브릿지를 찾을 수 없습니다.\n기기 전원과 블루투스 상태를 확인해주세요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.redAccent),
                 ),
-              )
-            else
-              DropdownButtonFormField<int>(
-                value: _selectedBridgeId,
-                hint: const Text('기기를 선택하세요'),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  prefixIcon: const Icon(Icons.router_outlined),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _startBleScan,
+                  child: const Text('다시 스캔하기'),
                 ),
-                items: pendingBridges.map<DropdownMenuItem<int>>((bridge) {
-                  return DropdownMenuItem<int>(
-                    value: bridge['id'],
-                    child: Text('기기 ID: ${bridge['id']} (${bridge['token'].toString().substring(0, 5)}...)'),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() => _selectedBridgeId = value);
-                },
+              ]
+            ] else ...[
+              const Icon(Icons.check_circle_outline, color: Colors.green, size: 60),
+              const SizedBox(height: 16),
+              const Text(
+                '브릿지가 성공적으로 연결되었습니다!',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
-
-            const SizedBox(height: 32),
-
-            // 2. 카메라 이름 입력 UI
-            const Text('2. 카메라 이름 설정', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: '예: 거실, 아이방',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                prefixIcon: const Icon(Icons.videocam_outlined),
+              const SizedBox(height: 8),
+              Text(
+                'Bridge ID: $_bridgeId',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
               ),
-            ),
-            
-            const SizedBox(height: 40),
-
-            // 3. 등록 버튼
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                // 기기가 없거나 제출 중이면 버튼 비활성화
-                onPressed: (_isSubmitting || pendingBridges.isEmpty) ? null : _submit,
+              const SizedBox(height: 32),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: '카메라 이름 (예: 거실, 아기방)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.videocam),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  disabledBackgroundColor: colorScheme.surfaceVariant,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: _isSubmitting
-                    ? const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 20, height: 20, 
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                          ),
-                          SizedBox(width: 12),
-                          Text('서버 등록 중...', style: TextStyle(fontSize: 16, color: Colors.white))
-                        ],
-                      )
-                    : const Text('카메라 등록', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                onPressed: _registerCamera,
+                child: const Text('서버에 카메라 등록하기', style: TextStyle(fontSize: 16)),
               ),
-            )
+            ],
           ],
         ),
       ),
