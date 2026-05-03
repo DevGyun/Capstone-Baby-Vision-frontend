@@ -1,60 +1,132 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../config.dart';
 
-// 로그 데이터 구조체
+// 백엔드 GET /alerts 응답에 맞춰 정의
+// 응답 예: {id, message, is_read, sent_at, zone_name, confidence, detected_at}
 class IncidentLog {
-  final String title;
-  final String time;
-  final String description;
-  final IconData icon;
-  final Color iconColor;
-  final bool isAlert;
-  final String imageUrl;
+  final int id;
+  final String message;
+  final bool isRead;
+  final DateTime sentAt;
+  final String? zoneName;
+  final double? confidence;
+  final DateTime? detectedAt;
 
   IncidentLog({
-    required this.title,
-    required this.time,
-    required this.description,
-    required this.icon,
-    required this.iconColor,
-    this.isAlert = false,
-    required this.imageUrl,
+    required this.id,
+    required this.message,
+    required this.isRead,
+    required this.sentAt,
+    this.zoneName,
+    this.confidence,
+    this.detectedAt,
   });
+
+  factory IncidentLog.fromJson(Map<String, dynamic> json) {
+    return IncidentLog(
+      id:         json['id'],
+      message:    json['message'] ?? '',
+      isRead:     json['is_read'] ?? false,
+      sentAt:     DateTime.parse(json['sent_at']).toLocal(),
+      zoneName:   json['zone_name'],
+      confidence: (json['confidence'] as num?)?.toDouble(),
+      detectedAt: json['detected_at'] != null
+                  ? DateTime.parse(json['detected_at']).toLocal()
+                  : null,
+    );
+  }
+
+  // ── UI 호환용 getter (history/main/details 화면에서 사용) ─
+  String get title       => zoneName != null ? '$zoneName 감지' : '위험 감지';
+  String get description => message;
+  String get time        => _timeAgo(sentAt);
+  IconData get icon      => Icons.warning_amber_rounded;
+  Color get iconColor    => Colors.redAccent;
+  bool get isAlert       => true;
+  String get imageUrl    => 'assets/images/1babyscreen.png';
+
+  static String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1)  return '방금 전';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+    if (diff.inHours   < 24) return '${diff.inHours}시간 전';
+    return '${diff.inDays}일 전';
+  }
 }
 
-// 상태 관리 프로바이더
 class LogProvider extends ChangeNotifier {
-  // 실제 서버 대신 임시로 들고 있을 로그 데이터들
-  final List<IncidentLog> _logs = [
-    IncidentLog(
-      title: '위험 감지',
-      time: '방금 전',
-      description: '제 1구역 아이방 베란다 접근 감지',
-      icon: Icons.warning,
-      iconColor: Colors.redAccent,
-      isAlert: true,
-      imageUrl: 'assets/images/1babyscreen.png',
-    ),
-    IncidentLog(
-      title: '일반 알림',
-      time: '15분 전',
-      description: '침대 위 일반적인 움직임 감지',
-      icon: Icons.info_outline,
-      iconColor: Colors.blueAccent,
-      imageUrl: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80',
-    ),
-    IncidentLog(
-      title: '시스템 알림',
-      time: '1시간 전',
-      description: '카메라 01 펌웨어 업데이트 완료',
-      icon: Icons.settings,
-      iconColor: Colors.grey,
-      imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&q=80',
-    ),
-  ];
+  List<IncidentLog> _logs = [];
+  bool _isLoading = false;
 
   List<IncidentLog> get logs => _logs;
+  bool get isLoading => _isLoading;
 
-  // 새로운 알람이 오면 맨 위에 추가하고 화면 갱신
+  Future<Map<String, String>?> _authHeaders() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken');
+    if (token == null) return null;
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+      'ngrok-skip-browser-warning': '69420',
+    };
+  }
+
+  // ── 알림 목록 조회 ── GET /alerts
+  Future<void> fetchAlerts() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final headers = await _authHeaders();
+      if (headers == null) {
+        _isLoading = false;
+        notifyListeners();
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('${AppConfig.baseUrl}/alerts'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        _logs = data.map((e) => IncidentLog.fromJson(e)).toList();
+      } else {
+        print('알림 목록 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('알림 목록 에러: $e');
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // ── 읽음 처리 ── PATCH /alerts/{id}/read
+  Future<void> markAsRead(int alertId) async {
+    try {
+      final headers = await _authHeaders();
+      if (headers == null) return;
+
+      final response = await http.patch(
+        Uri.parse('${AppConfig.baseUrl}/alerts/$alertId/read'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        await fetchAlerts(); // 목록 다시 받아오기
+      }
+    } catch (e) {
+      print('읽음 처리 에러: $e');
+    }
+  }
+
+  // 로컬 푸시 도착 시 즉시 추가용 (서버 동기화는 fetchAlerts로)
   void addLog(IncidentLog newLog) {
     _logs.insert(0, newLog);
     notifyListeners();

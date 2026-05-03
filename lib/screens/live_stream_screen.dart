@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import '../widgets/hls_player.dart'; // 💡 새로 만든 HLS 위젯 임포트
+import '../widgets/hls_player.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
   final String cameraName;
-  final String streamUrl; 
+  final String streamUrl; // 백엔드에서 받은 hls_url 전체 (http://host:8888/uuid/index.m3u8)
 
   const LiveStreamScreen({
-    super.key, 
-    required this.cameraId, 
+    super.key,
+    required this.cameraId,
     required this.cameraName,
-    required this.streamUrl, 
+    required this.streamUrl,
   });
 
   @override
@@ -36,7 +36,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
     super.dispose();
   }
 
-  // ── 액션 핸들러 ──
   void _takeSnapshot() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('화면이 갤러리에 안전하게 저장되었습니다.'), behavior: SnackBarBehavior.floating),
@@ -63,7 +62,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text('실시간 CCTV 모니터링', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          // LIVE 깜빡임 애니메이션
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -86,26 +84,26 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // ── 영상 출력부 ──
               Expanded(
                 child: Stack(
                   children: [
-                    // 1. 실제 영상 렌더러 (HLS)
                     Container(
                       width: double.infinity,
                       height: double.infinity,
                       decoration: BoxDecoration(
                         color: Colors.black,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _isRecording ? Colors.redAccent : Colors.grey[800]!, width: _isRecording ? 2 : 1),
+                        border: Border.all(
+                          color: _isRecording ? Colors.redAccent : Colors.grey[800]!,
+                          width: _isRecording ? 2 : 1,
+                        ),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: HlsPlayer(streamUrl: widget.streamUrl), // 💡 HLS 위젯 적용
+                        child: HlsPlayer(streamUrl: widget.streamUrl),
                       ),
                     ),
-                    
-                    // 2. REC 아이콘 오버레이
+
                     if (_isRecording)
                       Positioned(
                         top: 16, right: 16,
@@ -125,20 +123,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
                         ),
                       ),
 
-                    // 3. DANGER ZONE 오버레이
                     Positioned(
                       top: 40, left: 60,
                       child: Container(
                         width: 150, height: 200,
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.orangeAccent, width: 2), 
-                          borderRadius: BorderRadius.circular(8)
+                          border: Border.all(color: Colors.orangeAccent, width: 2),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: Container(
-                            margin: const EdgeInsets.only(top: 4), 
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2), 
+                            margin: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             color: Colors.orangeAccent,
                             child: const Text('DANGER ZONE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                           ),
@@ -150,23 +147,24 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with SingleTickerPr
               ),
               const SizedBox(height: 16),
 
-              // ── 하단 컨트롤 패널 ──
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
                 child: Column(
                   children: [
                     Row(
-  children: [
-    Icon(Icons.videocam),
-    Expanded( // 💡 공간이 부족하면 자동으로 줄여주는 위젯으로 감싸기
-      child: Text(
-        '카메라 이름이 너무 깁니다', 
-        overflow: TextOverflow.ellipsis, // 글자가 넘치면 '...'으로 표시
-      ),
-    ),
-  ],
-),
+                      children: [
+                        const Icon(Icons.videocam, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.cameraName, // ✅ 실제 카메라 이름 표시
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                     const Padding(padding: EdgeInsets.symmetric(vertical: 12.0), child: Divider(color: Colors.grey, height: 1)),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,

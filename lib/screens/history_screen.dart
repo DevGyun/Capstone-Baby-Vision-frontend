@@ -11,7 +11,6 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProviderStateMixin {
-  bool _isLoading = true;
   late AnimationController _pulseController;
 
   @override
@@ -22,8 +21,9 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (mounted) setState(() => _isLoading = false);
+    // 화면 진입 시 알림 목록 새로 받아오기
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<LogProvider>().fetchAlerts();
     });
   }
 
@@ -36,9 +36,10 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
-    // 💡 메인 스크린과 완벽하게 동일한 로그 데이터를 가져옵니다.
-    final logs = context.watch<LogProvider>().logs;
+
+    final logProvider = context.watch<LogProvider>();
+    final logs = logProvider.logs;
+    final isLoading = logProvider.isLoading;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -46,30 +47,55 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         title: Text('사건 로그 내역', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
         elevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: isLoading ? null : () => context.read<LogProvider>().fetchAlerts(),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('우리 아이 안심 로그', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            
-            // 로딩 중엔 스켈레톤, 로딩 끝나면 로그 리스트 렌더링
-            _isLoading 
-              ? Column(
+      body: RefreshIndicator(
+        onRefresh: () => context.read<LogProvider>().fetchAlerts(),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('우리 아이 안심 로그', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+
+              if (isLoading && logs.isEmpty)
+                Column(
                   children: List.generate(3, (index) => Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: _buildSkeletonCard(),
                   )),
-                ) 
-              : Column(
+                )
+              else if (logs.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 60),
+                  child: Column(
+                    children: [
+                      Icon(Icons.notifications_off_outlined, size: 64, color: colorScheme.onSurfaceVariant),
+                      const SizedBox(height: 16),
+                      Text(
+                        '아직 감지된 이벤트가 없습니다.',
+                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Column(
                   children: logs.map((log) => Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _buildLogCard(context, log), // 데이터 전달
+                    child: _buildLogCard(context, log),
                   )).toList(),
                 ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -104,7 +130,6 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     );
   }
 
-  // 💡 전달받은 Log 데이터를 이용해 카드를 그립니다.
   Widget _buildLogCard(BuildContext context, IncidentLog log) {
     return Container(
       decoration: BoxDecoration(
@@ -121,19 +146,12 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: log.imageUrl.startsWith('http') 
-                    ? Image.network(
-                        log.imageUrl,
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      )
-                    : Image.asset(
-                        log.imageUrl,
-                        height: 160,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
+                  child: Image.asset(
+                    log.imageUrl,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 Positioned(
                   top: 12, left: 12,
@@ -149,6 +167,15 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                     ),
                   ),
                 ),
+                if (!log.isRead)
+                  Positioned(
+                    top: 12, right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(4)),
+                      child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
@@ -157,12 +184,12 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
             Text(log.description, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(log.time, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-           const SizedBox(height: 16),
+            const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () => Navigator.push(
-                  context, 
+                  context,
                   MaterialPageRoute(
                     builder: (context) => IncidentDetailsScreen(log: log),
                   ),

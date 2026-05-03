@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
-// hls_player.dart 에서 호출할 약속된 함수
-Widget getPlatformPlayer(String streamId) {
-  return MobileHlsPlayer(streamId: streamId);
+Widget getPlatformPlayer(String hlsUrl) {
+  return MobileHlsPlayer(hlsUrl: hlsUrl);
 }
 
 class MobileHlsPlayer extends StatefulWidget {
-  final String streamId;
-  const MobileHlsPlayer({super.key, required this.streamId});
+  // 전체 HLS URL을 그대로 받음 (백엔드 hls_url 필드)
+  final String hlsUrl;
+
+  const MobileHlsPlayer({super.key, required this.hlsUrl});
 
   @override
   State<MobileHlsPlayer> createState() => _MobileHlsPlayerState();
@@ -22,20 +23,17 @@ class _MobileHlsPlayerState extends State<MobileHlsPlayer> {
   @override
   void initState() {
     super.initState();
-    // 💡 [핵심] 모바일 HLS 플레이어는 MediaMTX 서버 규칙에 따라 끝에 '/index.m3u8'이 반드시 붙어야 합니다!
-    final fullHlsUrl = 'http://211.243.47.179:8888/${widget.streamId}/index.m3u8';
-
-    _controller = VideoPlayerController.networkUrl(Uri.parse(fullHlsUrl))
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.hlsUrl))
       ..initialize().then((_) {
         if (mounted) {
           setState(() {
             _isInitialized = true;
             _hasError = false;
           });
-          _controller.play(); // 영상 자동 재생
+          _controller.play();
         }
       }).catchError((error) {
-        debugPrint('모바일 비디오 에러: $error');
+        debugPrint('모바일 HLS 비디오 에러: $error');
         if (mounted) {
           setState(() => _hasError = true);
         }

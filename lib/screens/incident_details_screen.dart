@@ -1,22 +1,42 @@
 import 'package:flutter/material.dart';
-import '../providers/log_provider.dart'; // 💡 데이터 구조체 임포트
+import 'package:provider/provider.dart';
+import '../providers/log_provider.dart';
 
-class IncidentDetailsScreen extends StatelessWidget {
-  final IncidentLog log; // 💡 선택된 로그 데이터를 받아올 변수
+class IncidentDetailsScreen extends StatefulWidget {
+  final IncidentLog log;
 
   const IncidentDetailsScreen({super.key, required this.log});
 
   @override
+  State<IncidentDetailsScreen> createState() => _IncidentDetailsScreenState();
+}
+
+class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // 상세 페이지 진입 시 자동으로 읽음 처리
+    if (!widget.log.isRead) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<LogProvider>().markAsRead(widget.log.id);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final log = widget.log;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.grey),
+          icon: Icon(Icons.arrow_back, color: colorScheme.onSurfaceVariant),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Eye Catch 상세 보고서', style: TextStyle(color: Color(0xFF003d9b), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text('Eye Catch 상세 보고서', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -24,26 +44,20 @@ class IncidentDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 비디오/이미지 영역
             Stack(
               alignment: Alignment.center,
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  // 💡 [수정] http와 로컬 assets 이미지를 모두 렌더링할 수 있도록 분기 처리
-                  child: log.imageUrl.startsWith('http')
-                    ? Image.network(
-                        log.imageUrl,
-                        width: double.infinity, height: 220, fit: BoxFit.cover,
-                        color: Colors.black.withOpacity(0.2), colorBlendMode: BlendMode.darken,
-                      )
-                    : Image.asset(
-                        log.imageUrl,
-                        width: double.infinity, height: 220, fit: BoxFit.cover,
-                        color: Colors.black.withOpacity(0.2), colorBlendMode: BlendMode.darken,
-                      ),
+                  child: Image.asset(
+                    log.imageUrl,
+                    width: double.infinity,
+                    height: 220,
+                    fit: BoxFit.cover,
+                    color: Colors.black.withOpacity(0.2),
+                    colorBlendMode: BlendMode.darken,
+                  ),
                 ),
-                // 위험 경고 아이콘 (Alert 상태일 때만 표시)
                 if (log.isAlert)
                   Container(
                     width: 80, height: 80,
@@ -53,14 +67,13 @@ class IncidentDetailsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            
-            // 상세 텍스트 영역
+
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Theme.of(context).shadowColor.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,23 +81,55 @@ class IncidentDetailsScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
-                    // 💡 [수정] 실제 로그의 데이터 바인딩
                     child: Text(
-                      log.isAlert ? '알림: 주의 필요' : '일반 시스템 기록', 
-                      style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold)
+                      log.isAlert ? '알림: 주의 필요' : '일반 시스템 기록',
+                      style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(height: 16),
                   Text(log.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text('감지 시간: ${log.time}', style: const TextStyle(color: Colors.grey)),
+                  Text(
+                    '감지 시간: ${log.time}',
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
                   const SizedBox(height: 24),
                   const Text('상세 내용', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(
                     log.description,
-                    style: const TextStyle(height: 1.5, color: Colors.black87),
+                    style: TextStyle(height: 1.5, color: colorScheme.onSurface),
                   ),
+
+                  // 추가 정보 (백엔드에서 받은 정확도, 정확한 시각)
+                  if (log.confidence != null || log.detectedAt != null) ...[
+                    const SizedBox(height: 24),
+                    const Divider(),
+                    const SizedBox(height: 16),
+                    const Text('추가 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    if (log.confidence != null)
+                      _buildInfoRow(
+                        context,
+                        Icons.psychology,
+                        'AI 분석 정확도',
+                        '${(log.confidence! * 100).toStringAsFixed(1)}%',
+                      ),
+                    if (log.detectedAt != null)
+                      _buildInfoRow(
+                        context,
+                        Icons.access_time,
+                        '정확 감지 시각',
+                        _formatDateTime(log.detectedAt!),
+                      ),
+                    if (log.zoneName != null)
+                      _buildInfoRow(
+                        context,
+                        Icons.location_on,
+                        '감지 구역',
+                        log.zoneName!,
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -92,5 +137,26 @@ class IncidentDetailsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: colorScheme.onSurfaceVariant, size: 18),
+          const SizedBox(width: 8),
+          Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+          const Spacer(),
+          Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+           '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }

@@ -2,33 +2,38 @@ import 'package:flutter/material.dart';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
-// hls_player.dart 에서 호출할 약속된 함수
-Widget getPlatformPlayer(String streamId) {
-  return WebHlsPlayer(streamId: streamId);
+Widget getPlatformPlayer(String hlsUrl) {
+  return WebHlsPlayer(hlsUrl: hlsUrl);
 }
 
 class WebHlsPlayer extends StatefulWidget {
-  final String streamId;
-  const WebHlsPlayer({super.key, required this.streamId});
+  final String hlsUrl; // http://host:8888/uuid/index.m3u8
+
+  const WebHlsPlayer({super.key, required this.hlsUrl});
 
   @override
   State<WebHlsPlayer> createState() => _WebHlsPlayerState();
 }
 
 class _WebHlsPlayerState extends State<WebHlsPlayer> {
-  late String fullUrl;
   late String viewId;
+  late String iframeUrl;
 
   @override
   void initState() {
     super.initState();
-    fullUrl = 'http://211.243.47.179:8888/${widget.streamId}/';
-    viewId = 'iframe-video-player-${widget.streamId}';
+
+    // 'http://host:8888/uuid/index.m3u8' → 'http://host:8888/uuid/' (MediaMTX 기본 웹 플레이어 페이지)
+    iframeUrl = widget.hlsUrl.endsWith('/index.m3u8')
+        ? widget.hlsUrl.substring(0, widget.hlsUrl.length - 'index.m3u8'.length)
+        : widget.hlsUrl;
+
+    viewId = 'iframe-video-player-${widget.hlsUrl.hashCode}';
 
     // ignore: undefined_prefixed_name
     ui_web.platformViewRegistry.registerViewFactory(viewId, (int id) {
       final iframe = html.IFrameElement()
-        ..src = fullUrl
+        ..src = iframeUrl
         ..style.border = 'none'
         ..style.width = '100%'
         ..style.height = '100%'
