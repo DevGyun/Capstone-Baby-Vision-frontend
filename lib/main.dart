@@ -16,11 +16,13 @@ import 'providers/settings_provider.dart';
 import 'providers/log_provider.dart';
 import 'providers/camera_provider.dart';
 
+// 서비스들
+import 'services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // (Firebase 등 초기화 코드는 필요 시 주석 해제)
-  // await Firebase.initializeApp();
+  await NotificationService().init();
 
   final prefs = await SharedPreferences.getInstance();
   final bool hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;

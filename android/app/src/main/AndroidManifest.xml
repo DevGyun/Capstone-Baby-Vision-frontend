@@ -10,6 +10,8 @@
     <!-- 블루투스 스캔 시 정확한 위치 권한 필요 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 알림 권한 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:label="아이캐치"
