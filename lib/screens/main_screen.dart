@@ -1,16 +1,28 @@
+// 1. Dart & Flutter Core
 import 'dart:ui';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
-import 'add_camera_screen.dart';
+import 'package:flutter/material.dart';
+
+// 2. Third-party Packages
+import 'package:provider/provider.dart';
+
+// 3. Providers (State Management)
 import '../providers/camera_provider.dart';
 import '../providers/log_provider.dart';
-import 'zone_screen.dart';
-import 'settings_screen.dart';
+
+// 4. Services
+import '../services/notification_service.dart';
+
+// 5. Screens
+import 'add_camera_screen.dart';
 import 'history_screen.dart';
-import 'live_stream_screen.dart';
 import 'incident_details_screen.dart';
-import '../widgets/hls_player.dart'; // 💡 HLS 플레이어 위젯 임포트
+import 'live_stream_screen.dart';
+import 'settings_screen.dart';
+import 'zone_screen.dart';
+
+// 6. Widgets
+import '../widgets/hls_player.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -82,31 +94,31 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  @override
-Widget build(BuildContext context) {
-  final colorScheme = Theme.of(context).colorScheme;
+@override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
-  return Scaffold(
-    // 1. 브라우저 전체 배경색 (바깥쪽 여백 공간)
-    backgroundColor: Colors.black87, 
-    
-    // 2. 전체를 중앙으로 배치
-    body: Center(
-      child: ConstrainedBox(
-        // 3. 앱의 최대 너비를 스마트폰 크기 정도로 제한
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Container(
-          // 4. 실제 앱의 배경색
-          color: colorScheme.surface, 
-          child: Stack(
-            children: [
-              IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  _buildMonitoringView(colorScheme),
-                  const ZoneScreen(),
-                  const HistoryScreen(),
-                  const SettingsScreen(),
+    return Scaffold(
+      // 1. 브라우저 전체 배경색 (바깥쪽 여백 공간)
+      backgroundColor: Colors.black87, 
+      
+      // 2. 전체를 중앙으로 배치
+      body: Center(
+        child: ConstrainedBox(
+          // 3. 앱의 최대 너비를 스마트폰 크기 정도로 제한
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            // 4. 실제 앱의 배경색
+            color: colorScheme.surface, 
+            child: Stack(
+              children: [
+                IndexedStack(
+                  index: _selectedIndex,
+                  children: [
+                    _buildMonitoringView(colorScheme),
+                    const ZoneScreen(),
+                    const HistoryScreen(),
+                    const SettingsScreen(),
                   ],
                 ),
                 Positioned(
@@ -118,20 +130,15 @@ Widget build(BuildContext context) {
           ),
         ),
       ),
-      // 경보 버튼 역시 PC 웹화면 중앙 정렬에 맞춰 이동시킴
-      floatingActionButton: _selectedIndex == 0 
-        ? Padding(
-            padding: const EdgeInsets.only(bottom: 80.0),
-            child: FloatingActionButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('수동 경보가 작동되었습니다.'), backgroundColor: Colors.redAccent));
-              },
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-              child: const Icon(Icons.add_alert),
-            ),
-          )
-        : null,
+      // 경보 버튼 (수정됨: 불필요한 ': null' 제거)
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          // 버튼 클릭 시 알림 발생
+          await NotificationService().showTestNotification();
+        },
+        backgroundColor: Colors.red,
+        child: const Icon(Icons.add_alert, color: Colors.white),
+      ), 
     );
   }
 
