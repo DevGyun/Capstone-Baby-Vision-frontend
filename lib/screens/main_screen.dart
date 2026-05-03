@@ -1,5 +1,6 @@
 // 1. Dart & Flutter Core
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 // 2. Third-party Packages
@@ -19,6 +20,9 @@ import 'incident_details_screen.dart';
 import 'live_stream_screen.dart';
 import 'settings_screen.dart';
 import 'zone_screen.dart';
+
+// 6. Widgets
+import '../widgets/hls_player.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -42,7 +46,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CameraProvider>().fetchCameras();
-      context.read<LogProvider>().fetchAlerts();
     });
   }
 
@@ -52,7 +55,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  void _showDeleteConfirmation(BuildContext context, int cameraId, String cameraName) {
+  void _showDeleteConfirmation(BuildContext context, String cameraId, String cameraName) {
     showDialog(
       context: context,
       builder: (childContext) => AlertDialog(
@@ -65,16 +68,17 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(childContext);
-
+              Navigator.pop(childContext); // 다이얼로그 닫기
+              
               final success = await context.read<CameraProvider>().removeCamera(cameraId);
-
+              
               if (success && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('카메라가 성공적으로 제거되었습니다.')),
                 );
+                // 삭제 후 첫 번째 카메라로 선택 변경
                 setState(() => _selectedCameraIndex = 0);
-              } else if (mounted) {
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('삭제에 실패했습니다. 다시 시도해주세요.')),
                 );
@@ -90,17 +94,22 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
-  @override
+@override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.black87,
+      // 1. 브라우저 전체 배경색 (바깥쪽 여백 공간)
+      backgroundColor: Colors.black87, 
+      
+      // 2. 전체를 중앙으로 배치
       body: Center(
         child: ConstrainedBox(
+          // 3. 앱의 최대 너비를 스마트폰 크기 정도로 제한
           constraints: const BoxConstraints(maxWidth: 480),
           child: Container(
-            color: colorScheme.surface,
+            // 4. 실제 앱의 배경색
+            color: colorScheme.surface, 
             child: Stack(
               children: [
                 IndexedStack(
@@ -121,13 +130,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           ),
         ),
       ),
+      // 경보 버튼 (수정됨: 불필요한 ': null' 제거)
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          // 버튼 클릭 시 알림 발생
           await NotificationService().showTestNotification();
         },
         backgroundColor: Colors.red,
         child: const Icon(Icons.add_alert, color: Colors.white),
-      ),
+      ), 
     );
   }
 
@@ -164,7 +175,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           width: 8, height: 8,
                           decoration: BoxDecoration(
                             color: Colors.redAccent, shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(_pulseController.value * 0.5), blurRadius: 8, spreadRadius: 2)],
+                            boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(_pulseController.value * 0.5), blurRadius: 8, spreadRadius: 2)]
                           ),
                         ),
                       ),
@@ -176,10 +187,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               ],
             ),
             const SizedBox(height: 20),
-
+            
+            // 재생 대기 화면이 렌더링 됩니다. (크래시 방지용)
             _buildMainVideoCard(colorScheme),
             const SizedBox(height: 16),
-
+            
             _buildThumbnailsRow(colorScheme),
             const SizedBox(height: 24),
             _buildAiStatusCard(colorScheme),
@@ -208,11 +220,12 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             const SizedBox(width: 16),
             CircleAvatar(radius: 16, backgroundColor: colorScheme.primaryContainer, child: Icon(Icons.person, size: 20, color: colorScheme.onPrimaryContainer)),
           ],
-        ),
+        )
       ],
     );
   }
 
+  // 💡 메인 스크린에서는 영상을 렌더링하지 않고 대기 화면만 보여줍니다.
   Widget _buildMainVideoCard(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
@@ -228,15 +241,18 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     if (safeIndex >= cameras.length) safeIndex = 0;
 
     final currentCam = cameras[safeIndex];
-    final String camName    = currentCam.name;
-    final int cameraId      = currentCam.id;
-    final String streamUrl  = currentCam.hlsUrl; // ✅ HLS URL 사용
+    final String camName = currentCam.name;
+    final String cameraId = currentCam.id;
+    
+    // 💡 [여기가 추가되어야 합니다] currentCam 변수에서 streamUrl을 꺼냅니다.
+    final String streamUrl = currentCam.url;
 
     return GestureDetector(
+      // 💡 [수정된 부분] camera가 아닌 위에서 정의한 변수들을 전달합니다.
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveStreamScreen(
-        cameraId: cameraId.toString(),
+        cameraId: cameraId, 
         cameraName: camName,
-        streamUrl: streamUrl,
+        streamUrl: streamUrl, // 💡 새로 추가된 HLS 주소 전달
       ))),
       child: AspectRatio(
         aspectRatio: 16 / 9,
@@ -251,6 +267,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // --- 대기 화면 (재생 버튼) ---
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -259,7 +276,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: colorScheme.primary, shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 12, spreadRadius: 4)],
+                        boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 12, spreadRadius: 4)]
                       ),
                       child: Icon(Icons.play_arrow_rounded, size: 40, color: colorScheme.onPrimary),
                     ),
@@ -269,6 +286,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 ),
               ),
 
+              // --- 상단 위험 구역 표시 ---
               Positioned(
                 top: 16, left: 16,
                 child: Container(
@@ -284,6 +302,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 ),
               ),
 
+              // --- 하단 카메라 정보 표시 ---
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: Container(
@@ -299,15 +318,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         children: [
                           Icon(Icons.videocam, color: colorScheme.onSurfaceVariant, size: 16),
                           const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'CAM ${(safeIndex + 1).toString().padLeft(2, '0')} - $camName',
-                              style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
+                          Text('CAM 0${safeIndex + 1} - $camName', style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
+                      // 💡 [수정된 부분] 기존 단일 Icon을 Row로 묶고 휴지통 버튼 추가
                       Row(
                         children: [
                           IconButton(
@@ -318,7 +332,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                           ),
                           Icon(Icons.open_in_new, color: colorScheme.primary, size: 16),
                         ],
-                      ),
+                      )
                     ],
                   ),
                 ),
@@ -330,7 +344,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildThumbnailsRow(ColorScheme colorScheme) {
+Widget _buildThumbnailsRow(ColorScheme colorScheme) {
     final cameras = context.watch<CameraProvider>().cameras;
 
     return Row(
@@ -339,8 +353,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _selectedCameraIndex = i),
+              // 💡 하드코딩 제거: 백엔드에서 주는 썸네일이 있으면 쓰고, 없으면 기본 이미지 사용. 이름도 넘김
               child: _buildThumbnail(
-                'assets/images/1babyscreen.png',
+                cameras[i].thumbnailUrl ?? 'assets/images/1babyscreen.png', 
                 isActive: _selectedCameraIndex == i,
                 cameraName: cameras[i].name,
               ),
@@ -352,7 +367,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           child: GestureDetector(
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AddCameraScreen()),
+              MaterialPageRoute(
+                builder: (context) => AddCameraScreen(),
+              ),
             ),
             child: AspectRatio(
               aspectRatio: 16 / 9,
@@ -388,18 +405,19 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   ? Image.network(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken)
                   : Image.asset(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken),
             ),
+            // 💡 썸네일 위에 카메라 이름 텍스트 오버레이 추가 (구분용)
             Positioned(
               bottom: 4, left: 4,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
                 child: Text(
-                  cameraName,
+                  cameraName, 
                   style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ),
+            )
           ],
         ),
       ),
@@ -444,7 +462,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 const Text('3 개', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
               ],
             ),
-          ),
+          )
         ],
       ),
     );
@@ -452,7 +470,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   Widget _buildLiveLogsPanel(ColorScheme colorScheme) {
     final logs = context.watch<LogProvider>().logs;
-    final displayLogs = logs.take(2).toList();
+    final displayLogs = logs.take(2).toList(); 
 
     return Container(
       decoration: BoxDecoration(color: colorScheme.surfaceContainerLowest, borderRadius: BorderRadius.circular(24), border: Border.all(color: colorScheme.surfaceContainerHighest)),
@@ -469,20 +487,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
                   child: const Text('UPDATE NOW', style: TextStyle(color: Colors.redAccent, fontSize: 8, fontWeight: FontWeight.bold)),
-                ),
+                )
               ],
             ),
           ),
-          if (displayLogs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Text(
-                '아직 감지된 이벤트가 없습니다.',
-                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-              ),
-            )
-          else
-            ...displayLogs.map((log) => _buildLogItem(colorScheme, log)),
+          ...displayLogs.map((log) => _buildLogItem(colorScheme, log)),
           InkWell(
             onTap: () => setState(() => _selectedIndex = 2),
             child: Container(
@@ -491,19 +500,20 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
               decoration: BoxDecoration(border: Border(top: BorderSide(color: colorScheme.surfaceContainerHigh))),
               child: Text('모든 로그 보기', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary)),
             ),
-          ),
+          )
         ],
       ),
     );
   }
 
-  Widget _buildLogItem(ColorScheme colorScheme, IncidentLog log) {
+Widget _buildLogItem(ColorScheme colorScheme, IncidentLog log) {
     return GestureDetector(
+      // 💡 [추가] 터치 시 상세 화면으로 이동
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => IncidentDetailsScreen(log: log)),
       ),
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.opaque, // 터치 영역 확장
       child: Container(
         margin: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
         padding: const EdgeInsets.all(12),
@@ -525,10 +535,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     Text(log.time, style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
                   ]),
                   const SizedBox(height: 4),
-                  Text(log.description, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Text(log.description, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 ],
               ),
-            ),
+            )
           ],
         ),
       ),

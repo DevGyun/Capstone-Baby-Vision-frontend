@@ -1,7 +1,18 @@
-class AppConfig {
-  static const String SERVER_IP = '115.23.243.116';
+import 'package:flutter/foundation.dart';
 
-  static String get baseUrl => 'http://$SERVER_IP:8000';
-  static String get wsUrl  => 'ws://$SERVER_IP:8000';
-  static String get hlsUrl => 'http://$SERVER_IP:8888';
+class AppConfig {
+  // 💡 방금 찾은 내 PC의 IPv4 주소로 변경하세요!
+  static const String SERVER_IP = '115.23.243.116'; 
+
+  static String get baseUrl {
+    return 'http://$SERVER_IP:8000'; 
+  }
+
+  static String get wsUrl {
+    return 'ws://$SERVER_IP:8000';
+  }
+
+  static String get hlsUrl {
+    return 'http://$SERVER_IP:8888';
+  }
 }

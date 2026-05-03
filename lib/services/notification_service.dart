@@ -9,7 +9,6 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    // 앱 아이콘을 알림 아이콘으로 사용 (@mipmap/ic_launcher)
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -25,29 +24,31 @@ class NotificationService {
       iOS: initializationSettingsIOS,
     );
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    // ✅ v21: 위치 인자 → 명명 인자로 변경
+    await flutterLocalNotificationsPlugin.initialize(
+      settings: initializationSettings,
+    );
   }
 
-  // 임시 알림 발생 함수
   Future<void> showTestNotification({String? title, String? body}) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'baby_vision_channel', 
-      'Baby Vision Alerts', 
+      'baby_vision_channel',
+      'Baby Vision Alerts',
       channelDescription: '카메라 이상 현상 감지 알림',
       importance: Importance.max,
       priority: Priority.high,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
-      iOS: DarwinNotificationDetails(),
+      iOS: const DarwinNotificationDetails(),
     );
 
     await flutterLocalNotificationsPlugin.show(
-      0, 
-      title ?? '🚨 이상 현상 감지 테스트',
-      body ?? '카메라 화면에서 아기의 움직임이 감지되었습니다.',
-      platformDetails,
+      id: 0,
+      title: title ?? '🚨 이상 현상 감지 테스트',
+      body: body ?? '카메라 화면에서 아기의 움직임이 감지되었습니다.',
+      notificationDetails: platformDetails,
     );
   }
 }
