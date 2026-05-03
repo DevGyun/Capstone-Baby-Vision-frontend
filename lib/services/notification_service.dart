@@ -24,7 +24,7 @@ class NotificationService {
       iOS: initializationSettingsIOS,
     );
 
-    // ✅ v21: 위치 인자 → 명명 인자로 변경
+    // ✅ v21: settings 명명 인자 필수
     await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
     );
@@ -39,11 +39,13 @@ class NotificationService {
       priority: Priority.high,
     );
 
+    // DarwinNotificationDetails는 v21에서 const 생성자가 아니므로 final 사용
     final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: const DarwinNotificationDetails(),
     );
 
+    // ✅ v21: id, title, body, notificationDetails 모두 명명 인자
     await flutterLocalNotificationsPlugin.show(
       id: 0,
       title: title ?? '🚨 이상 현상 감지 테스트',
