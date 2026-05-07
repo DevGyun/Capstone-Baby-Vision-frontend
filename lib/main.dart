@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 // 화면들
@@ -18,6 +17,9 @@ import 'providers/camera_provider.dart';
 
 // 서비스들
 import 'services/notification_service.dart';
+
+// 디자인 시스템
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -73,18 +75,15 @@ class EyeCatchApp extends StatelessWidget {
         Locale('en', 'US'),
       ],
       locale: const Locale('ko', 'KR'),
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF003d9b), brightness: Brightness.light),
-        useMaterial3: true,
-        textTheme: GoogleFonts.notoSansKrTextTheme(ThemeData.light().textTheme),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF60a5fa), brightness: Brightness.dark),
-        useMaterial3: true,
-        textTheme: GoogleFonts.notoSansKrTextTheme(ThemeData.dark().textTheme),
-      ),
-      // 💡 Provider가 관리하는 테마 모드를 적용합니다.
-      themeMode: themeProvider.themeMode, 
+
+      // ── 새 디자인 시스템 적용 ──
+      // 기존 ColorScheme.fromSeed + GoogleFonts 직접 호출 코드를
+      // AppTheme.light() / AppTheme.dark()로 교체.
+      // 시스템 자동 전환은 themeProvider.themeMode가 처리.
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: themeProvider.themeMode,
+
       initialRoute: initialRoute,
       routes: {
         '/onboarding': (context) => const OnboardingScreen(),
@@ -94,4 +93,3 @@ class EyeCatchApp extends StatelessWidget {
     );
   }
 }
-//역행성공
