@@ -3,10 +3,10 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-// 2. Third-party Packages
+// 2. Third-party
 import 'package:provider/provider.dart';
 
-// 3. Providers (State Management)
+// 3. Providers
 import '../providers/camera_provider.dart';
 import '../providers/log_provider.dart';
 
@@ -21,6 +21,10 @@ import 'live_stream_screen.dart';
 import 'settings_screen.dart';
 import 'zone_screen.dart';
 
+// 6. Theme & widgets
+import '../theme/app_theme.dart';
+import '../widgets/common/common.dart';
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -28,185 +32,218 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  late AnimationController _pulseController;
   int _selectedCameraIndex = 0;
 
-  // ✨ 새 기능 #3: 자동 폴링 타이머
+  /// 자동 폴링 (30초마다 알림 + 카메라 연결 상태).
   Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<CameraProvider>().fetchCameras();
       context.read<LogProvider>().fetchAlerts();
     });
 
-    // ✨ 새 기능 #3: 30초마다 자동 새로고침 (알림 + 카메라 연결 상태)
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) {
-        context.read<LogProvider>().fetchAlerts();
-        context.read<CameraProvider>().fetchCameras();
-      }
+      if (!mounted) return;
+      context.read<LogProvider>().fetchAlerts();
+      context.read<CameraProvider>().fetchCameras();
     });
   }
 
   @override
   void dispose() {
     _pollingTimer?.cancel();
-    _pulseController.dispose();
     super.dispose();
-  }
-
-  void _showDeleteConfirmation(BuildContext context, int cameraId, String cameraName) {
-    showDialog(
-      context: context,
-      builder: (childContext) => AlertDialog(
-        title: const Text('카메라 제거', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Text('"$cameraName" 카메라를 정말 제거하시겠습니까?\n연결된 설정 정보가 모두 삭제됩니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(childContext),
-            child: const Text('취소', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(childContext);
-
-              final success = await context.read<CameraProvider>().removeCamera(cameraId);
-
-              if (success && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('카메라가 성공적으로 제거되었습니다.')),
-                );
-                setState(() => _selectedCameraIndex = 0);
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('삭제에 실패했습니다. 다시 시도해주세요.')),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('제거', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
+  // ─────────────────────────────────────────────────────────────
+  //   카메라 삭제 확인 다이얼로그
+  // ─────────────────────────────────────────────────────────────
+  void _showDeleteConfirmation(
+      BuildContext context, int cameraId, String cameraName) {
+    showDialog(
+      context: context,
+      builder: (childContext) {
+        final cs = Theme.of(childContext).colorScheme;
+        return Dialog(
+          backgroundColor: cs.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.warning_amber_rounded,
+                      color: AppColors.danger,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                Text(
+                  '카메라 제거',
+                  style: Theme.of(childContext).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '"$cameraName" 카메라를 제거하면 연결된\n위험구역과 알림 설정이 모두 사라져요.',
+                  style: Theme.of(childContext).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SoftButton(
+                        label: '취소',
+                        variant: SoftButtonVariant.tonal,
+                        onPressed: () => Navigator.pop(childContext),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm + 2),
+                    Expanded(
+                      child: SoftButton(
+                        label: '제거',
+                        icon: Icons.delete_outline,
+                        variant: SoftButtonVariant.danger,
+                        onPressed: () async {
+                          Navigator.pop(childContext);
+                          final success = await context
+                              .read<CameraProvider>()
+                              .removeCamera(cameraId);
+                          if (!mounted) return;
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('카메라가 제거되었어요'),
+                              ),
+                            );
+                            setState(() => _selectedCameraIndex = 0);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('제거에 실패했어요. 다시 시도해 주세요'),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   루트 빌드
+  // ─────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.black87,
+      backgroundColor: Colors.black,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Container(
-            color: colorScheme.surface,
+            color: cs.surface,
             child: Stack(
               children: [
                 IndexedStack(
                   index: _selectedIndex,
                   children: [
-                    _buildMonitoringView(colorScheme),
+                    _buildMonitoringView(),
                     const ZoneScreen(),
                     const HistoryScreen(),
                     const SettingsScreen(),
                   ],
                 ),
+                // 테스트 알림 FAB (플로팅 네비 위에 위치)
                 Positioned(
-                  bottom: 24, left: 24, right: 24,
-                  child: _buildFloatingNavBar(colorScheme),
+                  bottom: 110,
+                  right: AppSpacing.lg,
+                  child: _buildTestNotificationFab(),
+                ),
+                // 플로팅 네비
+                Positioned(
+                  bottom: AppSpacing.lg,
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  child: _buildFloatingNavBar(),
                 ),
               ],
             ),
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await NotificationService().showTestNotification();
-        },
-        backgroundColor: Colors.red,
-        child: const Icon(Icons.add_alert, color: Colors.white),
-      ),
     );
   }
 
-Widget _buildMonitoringView(ColorScheme colorScheme) {
-  return SafeArea(
-    bottom: false,
-    child: RefreshIndicator(
-      // ✨ 아래로 당기면 카메라 + 알림 둘 다 새로고침
-      onRefresh: () async {
-        await context.read<CameraProvider>().fetchCameras();
-        await context.read<LogProvider>().fetchAlerts();
-      },
-      child: SingleChildScrollView(
-        // ✨ 컨텐츠가 짧아도 스크롤 가능하게 (당김 동작 위해 필수)
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(left: 20, right: 20, top: 8, bottom: 120),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTopHeader(colorScheme),
-            // ... 나머지 그대로
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Live System', style: TextStyle(color: colorScheme.primary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                      const SizedBox(height: 4),
-                      const Text('실시간 모니터링', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(20)),
-                    child: Row(
-                      children: [
-                        AnimatedBuilder(
-                          animation: _pulseController,
-                          builder: (context, child) => Container(
-                            width: 8, height: 8,
-                            decoration: BoxDecoration(
-                              color: Colors.redAccent, shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(color: Colors.redAccent.withOpacity(_pulseController.value * 0.5), blurRadius: 8, spreadRadius: 2)],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text('REC: LIVE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              _buildMainVideoCard(colorScheme),
-              const SizedBox(height: 16),
-
-              _buildThumbnailsRow(colorScheme),
-              const SizedBox(height: 24),
-              _buildAiStatusCard(colorScheme),
-              const SizedBox(height: 16),
-              _buildLiveLogsPanel(colorScheme),
+  // ─────────────────────────────────────────────────────────────
+  //   모니터링 화면 본문
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildMonitoringView() {
+    return SafeArea(
+      bottom: false,
+      child: RefreshIndicator(
+        color: AppColors.accent,
+        onRefresh: () async {
+          await context.read<CameraProvider>().fetchCameras();
+          await context.read<LogProvider>().fetchAlerts();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            120,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopHeader(),
+              const SizedBox(height: AppSpacing.lg),
+              _buildLiveSection(),
+              const SizedBox(height: AppSpacing.md - 4),
+              _buildThumbnailsRow(),
+              const SizedBox(height: AppSpacing.lg),
+              _buildStatsCards(),
+              const SizedBox(height: AppSpacing.md),
+              _buildRecentLogsPanel(),
             ],
           ),
         ),
@@ -214,44 +251,84 @@ Widget _buildMonitoringView(ColorScheme colorScheme) {
     );
   }
 
-  Widget _buildTopHeader(ColorScheme colorScheme) {
-    // ✨ 새 기능 #2: 안 읽은 알림 카운트
-    final unreadCount = context.watch<LogProvider>().logs.where((l) => !l.isRead).length;
+  // ─────────────────────────────────────────────────────────────
+  //   상단 헤더 (로고 + 알림 + 아바타)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildTopHeader() {
+    final cs = Theme.of(context).colorScheme;
+    final unreadCount =
+        context.watch<LogProvider>().logs.where((l) => !l.isRead).length;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        // 로고
         Row(
           children: [
-            Icon(Icons.visibility, color: colorScheme.primary, size: 28),
-            const SizedBox(width: 8),
-            Text('Eye Catch', style: TextStyle(color: colorScheme.primary, fontSize: 20, fontWeight: FontWeight.w900)),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.accentSoft(context),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.visibility_rounded,
+                color: AppColors.accent,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm + 2),
+            Text(
+              'Eye Catch',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+            ),
           ],
         ),
+        // 알림 + 아바타
         Row(
           children: [
-            // ✨ 종 아이콘에 안 읽은 알림 개수 배지
+            // 알림 벨 + 카운트
             GestureDetector(
               onTap: () => setState(() => _selectedIndex = 2),
+              behavior: HitTestBehavior.opaque,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(Icons.notifications_outlined, color: colorScheme.onSurfaceVariant),
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.notifications_outlined,
+                      color: cs.onSurfaceVariant,
+                      size: 22,
+                    ),
+                  ),
                   if (unreadCount > 0)
                     Positioned(
-                      top: -4, right: -4,
+                      top: 0,
+                      right: 0,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        constraints:
+                            const BoxConstraints(minWidth: 16, minHeight: 16),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.rectangle,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: colorScheme.surface, width: 2),
+                          color: AppColors.accent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: cs.surface, width: 2),
                         ),
                         child: Text(
                           unreadCount > 99 ? '99+' : unreadCount.toString(),
-                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -259,244 +336,391 @@ Widget _buildMonitoringView(ColorScheme colorScheme) {
                 ],
               ),
             ),
-            const SizedBox(width: 16),
-            CircleAvatar(radius: 16, backgroundColor: colorScheme.primaryContainer, child: Icon(Icons.person, size: 20, color: colorScheme.onPrimaryContainer)),
+            const SizedBox(width: AppSpacing.md),
+            GestureDetector(
+              onTap: () => setState(() => _selectedIndex = 3),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: cs.surfaceContainerHigh,
+                child: Icon(
+                  Icons.person_outline,
+                  size: 18,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildMainVideoCard(ColorScheme colorScheme) {
+  // ─────────────────────────────────────────────────────────────
+  //   "Live System / 실시간 모니터링" 섹션 + 메인 비디오
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildLiveSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'LIVE SYSTEM',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '실시간 모니터링',
+                  style: Theme.of(context).textTheme.displayLarge,
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 6),
+              child: SoftChip(
+                label: 'REC LIVE',
+                tone: SoftChipTone.dark,
+                leadingDot: true,
+                pulseDot: true,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _buildMainVideoCard(),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   메인 비디오 카드
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildMainVideoCard() {
+    final cs = Theme.of(context).colorScheme;
     final cameras = context.watch<CameraProvider>().cameras;
 
     if (cameras.isEmpty) {
-      return Container(
-        width: double.infinity, height: 200,
-        decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(24)),
-        child: const Center(child: Text('등록된 카메라가 없습니다.\n+ 버튼을 눌러 추가해주세요.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))),
-      );
+      return _buildEmptyVideoCard();
     }
 
-    int safeIndex = _selectedCameraIndex;
-    if (safeIndex >= cameras.length) safeIndex = 0;
-
-    final currentCam = cameras[safeIndex];
-    final String camName    = currentCam.name;
-    final int cameraId      = currentCam.id;
-    final String streamUrl  = currentCam.hlsUrl;
+    final safeIndex = _selectedCameraIndex.clamp(0, cameras.length - 1);
+    final cam = cameras[safeIndex];
 
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LiveStreamScreen(
-        cameraId: cameraId.toString(),
-        cameraName: camName,
-        streamUrl: streamUrl,
-      ))),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => LiveStreamScreen(
+            cameraId: cam.id.toString(),
+            cameraName: cam.name,
+            streamUrl: cam.hlsUrl,
+          ),
+        ),
+      ),
       child: AspectRatio(
         aspectRatio: 16 / 9,
         child: Container(
-          width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            color: colorScheme.surfaceContainerHighest,
-            border: Border.all(color: colorScheme.outlineVariant),
-            boxShadow: [BoxShadow(color: colorScheme.shadow.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, 10))],
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            color: Colors.black,
+            border: Border.all(color: cs.outlineVariant, width: 0.5),
           ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary, shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: colorScheme.primary.withOpacity(0.4), blurRadius: 12, spreadRadius: 4)],
-                      ),
-                      child: Icon(Icons.play_arrow_rounded, size: 40, color: colorScheme.onPrimary),
-                    ),
-                    const SizedBox(height: 12),
-                    Text('라이브 화면 보기', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.lg - 0.5),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 영상 플레이스홀더 (실제 영상은 LiveStreamScreen에서)
+                Container(color: Colors.black),
 
-              Positioned(
-                top: 16, left: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 14),
-                      SizedBox(width: 4),
-                      Text('위험 구역 감지 켜짐', style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              ),
-
-              // ✨ 새 기능 #1: 카메라 연결 상태 (우측 상단)
-              Positioned(
-                top: 16, right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
+                // 중앙 재생 버튼
+                Center(
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 8, height: 8,
-                        decoration: BoxDecoration(
-                          color: currentCam.isConnected ? Colors.greenAccent : Colors.grey,
+                        width: 56,
+                        height: 56,
+                        decoration: const BoxDecoration(
+                          color: AppColors.accent,
                           shape: BoxShape.circle,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        currentCam.isConnected ? '온라인' : '오프라인',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              Positioned(
-                bottom: 0, left: 0, right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface,
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Icon(Icons.videocam, color: colorScheme.onSurfaceVariant, size: 16),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                'CAM ${(safeIndex + 1).toString().padLeft(2, '0')} - $camName',
-                                style: TextStyle(color: colorScheme.onSurface, fontSize: 12, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          size: 32,
+                          color: Colors.white,
                         ),
                       ),
-                      Row(
-                        children: [
-                          IconButton(
-                            constraints: const BoxConstraints(),
-                            padding: const EdgeInsets.only(right: 12),
-                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                            onPressed: () => _showDeleteConfirmation(context, cameraId, camName),
-                          ),
-                          Icon(Icons.open_in_new, color: colorScheme.primary, size: 16),
-                        ],
+                      const SizedBox(height: AppSpacing.sm + 2),
+                      const Text(
+                        '라이브 화면 보기',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                // 좌상단: 위험구역 감지 켜짐
+                const Positioned(
+                  top: 12,
+                  left: 12,
+                  child: SoftChip(
+                    label: '위험구역 감지 켜짐',
+                    tone: SoftChipTone.warning,
+                    icon: Icons.warning_amber_rounded,
+                  ),
+                ),
+
+                // 우상단: 연결 상태
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        StatusDot(
+                          kind: cam.isConnected
+                              ? StatusDotKind.online
+                              : StatusDotKind.offline,
+                          size: 6,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          cam.isConnected ? '온라인' : '오프라인',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 하단: 카메라 정보 + 삭제
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 16, 6, 10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cam.name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () => _showDeleteConfirmation(
+                              context, cam.id, cam.name),
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Icon(
+                              Icons.delete_outline_rounded,
+                              color: Colors.white.withOpacity(0.85),
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildThumbnailsRow(ColorScheme colorScheme) {
-    final cameras = context.watch<CameraProvider>().cameras;
+  // ─────────────────────────────────────────────────────────────
+  //   카메라 0대일 때 빈 상태 카드
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildEmptyVideoCard() {
+    final cs = Theme.of(context).colorScheme;
 
-    return Row(
-      children: [
-        for (int i = 0; i < cameras.length; i++) ...[
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _selectedCameraIndex = i),
-              child: _buildThumbnail(
-                'assets/images/1babyscreen.png',
-                isActive: _selectedCameraIndex == i,
-                cameraName: cameras[i].name,
-                isConnected: cameras[i].isConnected, // ✨ 썸네일에도 연결 상태
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        Expanded(
-          child: GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const AddCameraScreen()),
-            ),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
-                ),
-                child: Icon(Icons.add, color: colorScheme.outline),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildThumbnail(String url, {bool isActive = false, String cameraName = '', bool isConnected = false}) {
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          border: isActive ? Border.all(color: Theme.of(context).colorScheme.primary, width: 3) : null,
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: cs.outlineVariant, width: 0.5),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentSoft(context),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.videocam_off_outlined,
+                    color: AppColors.accent,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm + 2),
+                Text(
+                  '연결된 카메라가 없어요',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '첫 카메라를 등록하고 아기를 지켜봐 주세요',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   카메라 썸네일 행 (가로 스크롤)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildThumbnailsRow() {
+    final cameras = context.watch<CameraProvider>().cameras;
+
+    return SizedBox(
+      height: 96,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.zero,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          for (int i = 0; i < cameras.length; i++) ...[
+            _buildThumbnailTile(
+              cameras[i],
+              isActive: _selectedCameraIndex == i,
+              onTap: () => setState(() => _selectedCameraIndex = i),
+            ),
+            const SizedBox(width: AppSpacing.sm + 2),
+          ],
+          _buildAddCameraTile(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThumbnailTile(
+    CameraModel cam, {
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 96,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.md - 2),
+          border: Border.all(
+            color: isActive ? AppColors.accent : cs.outlineVariant,
+            width: isActive ? 1.5 : 0.5,
+          ),
         ),
         child: Stack(
           fit: StackFit.expand,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(isActive ? 9 : 12),
-              child: url.startsWith('http')
-                  ? Image.network(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken)
-                  : Image.asset(url, fit: BoxFit.cover, color: isActive ? null : Colors.black.withOpacity(0.5), colorBlendMode: BlendMode.darken),
-            ),
-            // 카메라 이름
-            Positioned(
-              bottom: 4, left: 4,
+              borderRadius: BorderRadius.circular(AppRadius.md - 4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)),
-                child: Text(
-                  cameraName,
-                  style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                foregroundDecoration: BoxDecoration(
+                  color: isActive
+                      ? Colors.transparent
+                      : Colors.black.withOpacity(0.45),
+                ),
+                child: Image.asset(
+                  'assets/images/1babyscreen.png',
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
-            // ✨ 연결 상태 점
             Positioned(
-              top: 4, right: 4,
-              child: Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(
-                  color: isConnected ? Colors.greenAccent : Colors.grey,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black, width: 1),
+              bottom: 6,
+              left: 6,
+              right: 6,
+              child: Text(
+                cam.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  shadows: [Shadow(blurRadius: 4, color: Colors.black87)],
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: StatusDot(
+                kind: cam.isConnected
+                    ? StatusDotKind.online
+                    : StatusDotKind.offline,
+                size: 8,
               ),
             ),
           ],
@@ -505,132 +729,39 @@ Widget _buildMonitoringView(ColorScheme colorScheme) {
     );
   }
 
-  Widget _buildAiStatusCard(ColorScheme colorScheme) {
-    final cameras = context.watch<CameraProvider>().cameras;
-    final connectedCount = cameras.where((c) => c.isConnected).length;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: colorScheme.surfaceContainerLowest, borderRadius: BorderRadius.circular(24), border: Border.all(color: colorScheme.surfaceContainerHighest)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.psychology, color: colorScheme.primary),
-              const SizedBox(width: 8),
-              const Text('AI 인텔리전스 현황', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('분석 정확도', style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
-              Text('98.2%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(value: 0.982, backgroundColor: colorScheme.surfaceContainerHigh, valueColor: AlwaysStoppedAnimation(colorScheme.primary), minHeight: 6),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(color: colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('연결된 카메라', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant)),
-                // ✨ 실제 연결 카메라 수 표시
-                Text('$connectedCount / ${cameras.length} 대',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLiveLogsPanel(ColorScheme colorScheme) {
-    final logs = context.watch<LogProvider>().logs;
-    final displayLogs = logs.take(2).toList();
-
-    return Container(
-      decoration: BoxDecoration(color: colorScheme.surfaceContainerLowest, borderRadius: BorderRadius.circular(24), border: Border.all(color: colorScheme.surfaceContainerHighest)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('실시간 감지 로그', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.redAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                  child: const Text('UPDATE NOW', style: TextStyle(color: Colors.redAccent, fontSize: 8, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ),
-          if (displayLogs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Text(
-                '아직 감지된 이벤트가 없습니다.',
-                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
-              ),
-            )
-          else
-            ...displayLogs.map((log) => _buildLogItem(colorScheme, log)),
-          InkWell(
-            onTap: () => setState(() => _selectedIndex = 2),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: colorScheme.surfaceContainerHigh))),
-              child: Text('모든 로그 보기', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.primary)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLogItem(ColorScheme colorScheme, IncidentLog log) {
+  Widget _buildAddCameraTile() {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => IncidentDetailsScreen(log: log)),
+        MaterialPageRoute(builder: (_) => const AddCameraScreen()),
       ),
-      behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-        padding: const EdgeInsets.all(12),
+        width: 96,
         decoration: BoxDecoration(
-          color: log.isAlert ? log.iconColor.withOpacity(0.05) : colorScheme.surfaceContainerLow,
-          border: log.isAlert ? Border(left: BorderSide(color: log.iconColor, width: 4)) : null,
-          borderRadius: BorderRadius.circular(16),
+          color: AppColors.accentSoft(context),
+          borderRadius: BorderRadius.circular(AppRadius.md - 2),
+          border: Border.all(
+            color: AppColors.accent.withOpacity(0.4),
+            width: 1,
+          ),
         ),
-        child: Row(
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(log.icon, color: log.iconColor, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Text(log.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: log.iconColor)),
-                    Text(log.time, style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text(log.description, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
-                ],
+            const Icon(
+              Icons.add_rounded,
+              color: AppColors.accent,
+              size: 26,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '추가',
+              style: TextStyle(
+                color: AppColors.accent,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
               ),
             ),
           ],
@@ -639,26 +770,263 @@ Widget _buildMonitoringView(ColorScheme colorScheme) {
     );
   }
 
-  Widget _buildFloatingNavBar(ColorScheme colorScheme) {
+  // ─────────────────────────────────────────────────────────────
+  //   통계 카드 2개 (간소화된 AI 카드 대체)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildStatsCards() {
+    final cameras = context.watch<CameraProvider>().cameras;
+    final logs = context.watch<LogProvider>().logs;
+
+    final connected = cameras.where((c) => c.isConnected).length;
+    final total = cameras.length;
+    final unread = logs.where((l) => !l.isRead).length;
+    final totalLogs = logs.length;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.videocam_outlined,
+            label: '연결된 카메라',
+            value: total == 0 ? '0' : '$connected/$total',
+            unit: '대',
+            accentColor: AppColors.success,
+            progress: total == 0 ? 0 : connected / total,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm + 2),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.notifications_none_rounded,
+            label: '안 읽은 알림',
+            value: '$unread',
+            unit: '건',
+            accentColor: AppColors.accent,
+            progress: totalLogs == 0
+                ? 0
+                : (unread / totalLogs).clamp(0.0, 1.0),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   최근 알림 패널
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildRecentLogsPanel() {
+    final cs = Theme.of(context).colorScheme;
+    final logs = context.watch<LogProvider>().logs;
+    final displayLogs = logs.take(3).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: cs.outlineVariant, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md, AppSpacing.md, 8, AppSpacing.sm + 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '최근 알림',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                if (logs.isNotEmpty)
+                  InkWell(
+                    onTap: () => setState(() => _selectedIndex = 2),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      child: Row(
+                        children: [
+                          Text(
+                            '전체보기',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // 본문
+          if (displayLogs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md, 4, AppSpacing.md, AppSpacing.md),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    color: AppColors.success,
+                    size: 18,
+                  ),
+                  const SizedBox(width: AppSpacing.sm + 2),
+                  Expanded(
+                    child: Text(
+                      '아직 감지된 사건이 없어요',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...displayLogs.map((log) => _buildLogItem(log)),
+
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogItem(IncidentLog log) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => IncidentDetailsScreen(log: log)),
+        ),
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color:
+                      log.iconColor.withOpacity(isDark ? 0.18 : 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                alignment: Alignment.center,
+                child: Icon(log.icon, color: log.iconColor, size: 18),
+              ),
+              const SizedBox(width: AppSpacing.sm + 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            log.title,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: log.iconColor,
+                              letterSpacing: -0.1,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          log.time,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      log.description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: cs.onSurface.withOpacity(0.8),
+                        height: 1.4,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (!log.isRead) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   플로팅 네비게이션 바
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildFloatingNavBar() {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(30),
+      borderRadius: BorderRadius.circular(AppRadius.lg + 6),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
           height: 70,
           decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.light ? Colors.white.withOpacity(0.8) : Colors.black.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
-            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 10))],
+            color: isDark
+                ? cs.surfaceContainer.withOpacity(0.85)
+                : cs.surfaceContainerLow.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(AppRadius.lg + 6),
+            border: Border.all(
+              color: cs.outlineVariant.withOpacity(0.5),
+              width: 0.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildNavItem(0, Icons.videocam, '모니터링'),
-              _buildNavItem(1, Icons.grid_view, '구역 설정'),
-              _buildNavItem(2, Icons.history, '사건 내역'),
-              _buildNavItem(3, Icons.settings, '설정'),
+              _buildNavItem(0, Icons.videocam_outlined, '모니터링'),
+              _buildNavItem(1, Icons.shield_outlined, '구역'),
+              _buildNavItem(2, Icons.history_rounded, '내역'),
+              _buildNavItem(3, Icons.settings_outlined, '설정'),
             ],
           ),
         ),
@@ -667,23 +1035,173 @@ Widget _buildMonitoringView(ColorScheme colorScheme) {
   }
 
   Widget _buildNavItem(int index, IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedIndex == index;
 
     return GestureDetector(
       onTap: () => _onItemTapped(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(color: isSelected ? Theme.of(context).colorScheme.primaryContainer : Colors.transparent, borderRadius: BorderRadius.circular(20)),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSelected ? AppSpacing.md : AppSpacing.sm + 2,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color:
+              isSelected ? AppColors.accentSoft(context) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 24, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              icon,
+              size: 22,
+              color: isSelected ? AppColors.accent : cs.onSurfaceVariant,
+            ),
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.accent : cs.onSurfaceVariant,
+                letterSpacing: 0.1,
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   테스트 알림 FAB
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildTestNotificationFab() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () async {
+          await NotificationService().showTestNotification();
+        },
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.accent,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withOpacity(0.35),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.notifications_active_outlined,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//   서브 위젯
+// ════════════════════════════════════════════════════════════════
+
+/// 통계 카드 (간소화된 AI 카드 대체).
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String unit;
+  final Color accentColor;
+  final double progress;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.accentColor,
+    required this.progress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md - 2),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: cs.outlineVariant, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: cs.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm + 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Text(
+                unit,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: cs.surfaceContainerHigh,
+              valueColor: AlwaysStoppedAnimation(accentColor),
+            ),
+          ),
+        ],
       ),
     );
   }
