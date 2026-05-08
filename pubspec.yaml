@@ -22,7 +22,7 @@ dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/1babyscreen.png
+    - assets/images/
 
 flutter_launcher_icons:
   android: true
