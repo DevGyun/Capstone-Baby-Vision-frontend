@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/log_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common/empty_state_view.dart';
 import 'incident_details_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -21,7 +24,6 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    // 화면 진입 시 알림 목록 새로 받아오기
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LogProvider>().fetchAlerts();
     });
@@ -35,16 +37,15 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
+    final cs = Theme.of(context).colorScheme;
     final logProvider = context.watch<LogProvider>();
     final logs = logProvider.logs;
     final isLoading = logProvider.isLoading;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text('사건 로그 내역', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+        title: Text('사건 로그 내역', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
@@ -55,42 +56,34 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         ],
       ),
       body: RefreshIndicator(
+        color: AppColors.accent,
         onRefresh: () => context.read<LogProvider>().fetchAlerts(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 120),
+          padding: const EdgeInsets.only(left: AppSpacing.lg, right: AppSpacing.lg, top: AppSpacing.lg, bottom: 120),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('우리 아이 안심 로그', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
+              Text('우리 아이 안심 로그', style: Theme.of(context).textTheme.displayLarge ?? const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: AppSpacing.lg),
 
               if (isLoading && logs.isEmpty)
                 Column(
                   children: List.generate(3, (index) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: _buildSkeletonCard(),
                   )),
                 )
               else if (logs.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 60),
-                  child: Column(
-                    children: [
-                      Icon(Icons.notifications_off_outlined, size: 64, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(height: 16),
-                      Text(
-                        '아직 감지된 이벤트가 없습니다.',
-                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-                      ),
-                    ],
-                  ),
+                const EmptyStateView(
+                  icon: Icons.history_rounded,
+                  title: '아직 감지된 이벤트가 없어요',
+                  subtitle: '안전하게 모니터링 중입니다.', // <-- message를 subtitle로 수정했습니다!
                 )
               else
                 Column(
                   children: logs.map((log) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
+                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
                     child: _buildLogCard(context, log),
                   )).toList(),
                 ),
@@ -110,17 +103,17 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         return Opacity(
           opacity: 0.5 + (_pulseController.value * 0.5),
           child: Container(
-            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16)),
-            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(AppRadius.lg)),
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(height: 160, width: double.infinity, decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(12))),
-                const SizedBox(height: 16),
+                Container(height: 160, width: double.infinity, decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(AppRadius.md))),
+                const SizedBox(height: AppSpacing.md),
                 Container(height: 14, width: 80, color: baseColor),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 Container(height: 20, width: 200, color: baseColor),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 Container(height: 14, width: 150, color: baseColor),
               ],
             ),
@@ -131,33 +124,34 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
   }
 
   Widget _buildLogCard(BuildContext context, IncidentLog log) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Theme.of(context).shadowColor.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+    final cs = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => IncidentDetailsScreen(log: log)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          boxShadow: AppShadows.card(context),
+        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    log.imageUrl,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  child: Image.asset(log.imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover),
                 ),
                 Positioned(
-                  top: 12, left: 12,
+                  top: AppSpacing.sm, left: AppSpacing.sm,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: log.iconColor, borderRadius: BorderRadius.circular(4)),
+                    decoration: BoxDecoration(color: log.iconColor, borderRadius: BorderRadius.circular(AppRadius.sm)),
                     child: Row(
                       children: [
                         Icon(log.icon, color: Colors.white, size: 12),
@@ -169,40 +163,21 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                 ),
                 if (!log.isRead)
                   Positioned(
-                    top: 12, right: 12,
+                    top: AppSpacing.sm, right: AppSpacing.sm,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(AppRadius.sm)),
                       child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Text(log.title, style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(log.description, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text(log.time, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14)),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => IncidentDetailsScreen(log: log),
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('상세 기록 확인', style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-            ),
+            Text(log.time, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
           ],
         ),
       ),

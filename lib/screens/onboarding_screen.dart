@@ -1,7 +1,10 @@
 import 'dart:ui';
-import 'package:flutter/gestures.dart'; // 스와이프 동작 제어를 위해 추가
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../theme/app_theme.dart';
+import '../widgets/common/common.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -51,24 +54,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
+                  const Row(
                     children: [
-                      Icon(Icons.visibility, color: colorScheme.primary),
-                      const SizedBox(width: 8),
+                      Icon(Icons.visibility, color: AppColors.accent),
+                      SizedBox(width: AppSpacing.sm),
                       Text('Eye Catch', style: TextStyle(
-                        color: colorScheme.primary, 
+                        color: AppColors.accent, 
                         fontWeight: FontWeight.bold, 
                         fontSize: 20
                       )),
@@ -76,7 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   ),
                   TextButton(
                     onPressed: _finishOnboarding,
-                    child: const Text('건너뛰기', style: TextStyle(color: Colors.grey)),
+                    child: Text('건너뛰기', style: TextStyle(color: cs.onSurfaceVariant)),
                   ),
                 ],
               ),
@@ -85,21 +88,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
             Expanded(
               child: PageView(
                 controller: _pageController,
-                // 💡 웹(Chrome)에서 마우스 드래그로 좌우 스와이프를 가능하게 해주는 설정!
                 scrollBehavior: const MaterialScrollBehavior().copyWith(
                   dragDevices: {PointerDeviceKind.mouse, PointerDeviceKind.touch, PointerDeviceKind.trackpad},
                 ),
                 onPageChanged: (int page) => setState(() => _currentPage = page),
                 children: [
-                  _buildPage1(colorScheme), // 로컬 이미지 사용
-                  _buildPage2(colorScheme),
-                  _buildPage3(colorScheme),
+                  _buildPage1(cs),
+                  _buildPage2(cs),
+                  _buildPage3(cs),
                 ],
               ),
             ),
 
             Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(AppSpacing.xl),
               child: Column(
                 children: [
                   Row(
@@ -110,38 +112,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       height: 8,
                       width: _currentPage == index ? 24 : 8,
                       decoration: BoxDecoration(
-                        color: _currentPage == index ? colorScheme.primary : Colors.grey[300],
-                        borderRadius: BorderRadius.circular(4),
+                        color: _currentPage == index ? AppColors.accent : cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                     )),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: AppSpacing.xl),
                   
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _nextPage,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        foregroundColor: colorScheme.onPrimary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                        elevation: 4,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _currentPage == 2 ? '시작하기' : '다음 단계로',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          if (_currentPage < 2) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.arrow_forward),
-                          ]
-                        ],
-                      ),
-                    ),
+                  SoftButton(
+                    label: _currentPage == 2 ? '시작하기' : '다음 단계로',
+                    icon: _currentPage < 2 ? Icons.arrow_forward : null,
+                    onPressed: _nextPage,
                   ),
                 ],
               ),
@@ -152,17 +133,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  // ===================== [페이지 1] 실시간 모니터링 (앱 내부 파일 직접 연결) =====================
-  Widget _buildPage1(ColorScheme colorScheme) {
+  Widget _buildPage1(ColorScheme cs) {
     return _buildPageTemplate(
-      colorScheme,
+      cs,
       title: '실시간 아이 안심 모니터링',
       description: '회사에서도 집안에 있는 아이의 모습을\n24시간 실시간으로 확인하세요.',
       imageWidget: Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(32),
-            // 💡 앱 내부에 저장한 에셋 이미지를 직접 불러옵니다. (URL 에러 완벽 해결)
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             child: Image.asset(
               'assets/images/1babyscreen.png', 
               fit: BoxFit.cover,
@@ -171,7 +150,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               errorBuilder: (context, error, stackTrace) => _buildFallbackImage(),
             ),
           ),
-          
           Positioned.fill(
             child: IgnorePointer(
               child: Stack(
@@ -182,7 +160,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       width: 80, height: 80,
                       decoration: const BoxDecoration(
                         border: Border(top: BorderSide(color: Colors.white54, width: 2), left: BorderSide(color: Colors.white54, width: 2)),
-                        borderRadius: BorderRadius.only(topLeft: Radius.circular(16)),
+                        borderRadius: BorderRadius.only(topLeft: Radius.circular(AppRadius.lg)),
                       ),
                     ),
                   ),
@@ -192,7 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                       width: 80, height: 80,
                       decoration: const BoxDecoration(
                         border: Border(bottom: BorderSide(color: Colors.white54, width: 2), right: BorderSide(color: Colors.white54, width: 2)),
-                        borderRadius: BorderRadius.only(bottomRight: Radius.circular(16)),
+                        borderRadius: BorderRadius.only(bottomRight: Radius.circular(AppRadius.lg)),
                       ),
                     ),
                   ),
@@ -209,9 +187,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
               ),
             ),
           ),
-
           Positioned(
-            top: 24, left: 24,
+            top: AppSpacing.md, left: AppSpacing.md,
             child: _buildGlassCard(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -221,27 +198,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                     builder: (context, child) => Container(
                       width: 8, height: 8,
                       decoration: BoxDecoration(
-                        color: Colors.redAccent, shape: BoxShape.circle,
-                        boxShadow: [BoxShadow(color: Colors.red.withOpacity(_pulseController.value * 0.5), blurRadius: 10, spreadRadius: 4)]
+                        color: AppColors.danger, shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: AppColors.danger.withOpacity(_pulseController.value * 0.5), blurRadius: 10, spreadRadius: 4)]
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Text('LIVE', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Text('LIVE', style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.bold, fontSize: 12)),
                 ],
               ),
             ),
           ),
-
           Positioned(
-            bottom: 24, right: 24,
+            bottom: AppSpacing.md, right: AppSpacing.md,
             child: _buildGlassCard(
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.child_care, color: colorScheme.primary, size: 16),
-                  const SizedBox(width: 6),
-                  Text('Safe Zone Detection', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 12)),
+                  Icon(Icons.child_care, color: AppColors.accent, size: 16),
+                  SizedBox(width: 6),
+                  Text('Safe Zone Detection', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold, fontSize: 12)),
                 ],
               ),
             ),
@@ -251,35 +227,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  // ===================== [페이지 2] 위험 구역 설정 =====================
-  Widget _buildPage2(ColorScheme colorScheme) {
+  Widget _buildPage2(ColorScheme cs) {
     return _buildPageTemplate(
-      colorScheme,
+      cs,
       title: 'AI가 알아서 지키는 위험 구역',
       description: '주방, 베란다 등 위험한 곳을 설정하면\nAI가 아이의 접근을 즉시 감지합니다.',
       imageWidget: Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             child: Image.network(
               'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80',
               fit: BoxFit.cover, width: double.infinity, height: double.infinity,
               errorBuilder: (context, error, stackTrace) => _buildFallbackImage(),
             ),
           ),
-          Container(decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(32))),
+          Container(decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(AppRadius.lg))),
           Positioned(
             top: 60, bottom: 80, left: 40, right: 40,
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.orangeAccent, width: 3),
-                color: Colors.orangeAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.warning, width: 3),
+                color: AppColors.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(AppRadius.lg),
               ),
               child: const Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text('DANGER ZONE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, backgroundColor: Colors.orangeAccent)),
+                  padding: EdgeInsets.all(AppSpacing.sm),
+                  child: Text('DANGER ZONE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, backgroundColor: AppColors.warning)),
                 ),
               ),
             ),
@@ -289,27 +264,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  // ===================== [페이지 3] 즉각 알림 =====================
-  Widget _buildPage3(ColorScheme colorScheme) {
+  Widget _buildPage3(ColorScheme cs) {
     return _buildPageTemplate(
-      colorScheme,
+      cs,
       title: '놓치지 않는 즉각 알림',
       description: '위험 상황 발생 시 스마트폰으로\n즉시 알림과 영상을 보내드립니다.',
       imageWidget: Stack(
         alignment: Alignment.center,
         children: [
-          Container(decoration: BoxDecoration(color: colorScheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(32))),
+          Container(decoration: BoxDecoration(color: AppColors.accentSoft(context), borderRadius: BorderRadius.circular(AppRadius.lg))),
           Container(
             width: 220, height: 380,
             decoration: BoxDecoration(
-              color: colorScheme.surface, borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.grey[400]!, width: 6),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 20)],
+              color: cs.surface, borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: cs.surfaceContainerHighest, width: 6),
+              boxShadow: AppShadows.card(context),
             ),
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Image.network(
                     'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80',
                     fit: BoxFit.cover, width: double.infinity, height: double.infinity,
@@ -317,14 +291,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
                   ),
                 ),
                 Positioned(
-                  top: 24, left: 12, right: 12,
+                  top: AppSpacing.lg, left: AppSpacing.sm, right: AppSpacing.sm,
                   child: _buildGlassCard(
                     child: const Column(
                       crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.warning, color: Colors.redAccent, size: 16),
+                            Icon(Icons.warning, color: AppColors.danger, size: 16),
                             SizedBox(width: 4),
                             Text('Eye Catch 알림', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
                           ],
@@ -344,20 +318,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildPageTemplate(ColorScheme colorScheme, {required String title, required String description, required Widget imageWidget}) {
+  Widget _buildPageTemplate(ColorScheme cs, {required String title, required String description, required Widget imageWidget}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Column(
         children: [
-          Expanded(flex: 6, child: Padding(padding: const EdgeInsets.symmetric(vertical: 24.0), child: imageWidget)),
+          Expanded(flex: 6, child: Padding(padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg), child: imageWidget)),
           Expanded(
             flex: 3,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(title, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900), textAlign: TextAlign.center),
-                const SizedBox(height: 16),
-                Text(description, style: const TextStyle(fontSize: 16, color: Colors.grey, height: 1.5), textAlign: TextAlign.center),
+                const SizedBox(height: AppSpacing.md),
+                Text(description, style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant, height: 1.5), textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -368,13 +342,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   Widget _buildGlassCard({required Widget child}) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.7), borderRadius: BorderRadius.circular(16),
+            color: Colors.white.withOpacity(0.7), borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(color: Colors.white.withOpacity(0.2)),
           ),
           child: child,
@@ -385,7 +359,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with SingleTickerPr
 
   Widget _buildFallbackImage() {
     return Container(
-      color: Colors.grey[200],
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: const Center(child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
