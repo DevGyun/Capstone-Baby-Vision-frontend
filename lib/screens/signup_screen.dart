@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../config.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common/common.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -14,6 +17,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
@@ -24,11 +28,27 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  String? _validate() {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (name.isEmpty) return '이름을 입력해 주세요.';
+    if (email.isEmpty) return '이메일을 입력해 주세요.';
+    if (!RegExp(r'^[\w\.\-]+@[\w\-]+\.[\w\.\-]+$').hasMatch(email)) {
+      return '올바른 이메일 형식이 아니에요.';
+    }
+    if (password.isEmpty) return '비밀번호를 입력해 주세요.';
+    if (password.length < 8) return '비밀번호는 8자 이상으로 입력해 주세요.';
+    return null;
+  }
+
   Future<void> _handleSignup() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
-      _showSnackBar('모든 항목을 입력해주세요.');
+    FocusScope.of(context).unfocus();
+
+    final error = _validate();
+    if (error != null) {
+      _showSnack(error, isError: true);
       return;
     }
 
@@ -42,117 +62,180 @@ class _SignupScreenState extends State<SignupScreen> {
           'ngrok-skip-browser-warning': '69420',
         },
         body: jsonEncode({
-          'name': _nameController.text,
-          'email': _emailController.text,
+          'name': _nameController.text.trim(),
+          'email': _emailController.text.trim(),
           'password': _passwordController.text,
         }),
       );
 
+      if (!mounted) return;
+
       if (response.statusCode == 200 || response.statusCode == 201) {
-        if (!mounted) return;
-        _showSnackBar('회원가입이 완료되었습니다! 로그인 페이지로 이동합니다.');
+        _showSnack('회원가입이 완료되었어요. 이제 로그인해 보세요.', isError: false);
         Navigator.pop(context);
       } else {
-        final errorData = jsonDecode(response.body);
-        _showSnackBar('가입 실패: ${errorData['detail'] ?? '입력하신 정보를 확인해주세요.'}');
+        String? detail;
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map && data['detail'] is String) {
+            detail = data['detail'] as String;
+          }
+        } catch (_) {}
+        _showSnack(detail ?? '입력하신 정보를 다시 확인해 주세요.', isError: true);
       }
     } catch (e) {
-      _showSnackBar('서버와 통신할 수 없습니다. 서버가 켜져 있는지 확인해주세요.');
+      if (!mounted) return;
+      _showSnack('서버와 통신할 수 없어요. 네트워크를 확인해 주세요.', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnack(String message, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    final cs = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              size: 20,
+              color: isError ? AppColors.danger : AppColors.success,
+            ),
+            const SizedBox(width: AppSpacing.sm + 2),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // 테마의 바탕색(surface)을 사용해 다크/라이트 모드 자동 전환
-      backgroundColor: colorScheme.surface,
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: colorScheme.onSurfaceVariant),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('로그인으로 돌아가기', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Center(
-              child: Text(
-                'Eye Catch',
-                style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-            ),
-          ),
-        ],
+        title: const Text(''),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('새로운 계정 만들기',
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('안전관리 총괄 책임자 계정을 등록합니다.',
-                  style: TextStyle(color: colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 40),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  // 다크모드일 때 어두운 회색, 라이트모드일 때 흰색이 되는 cardColor 사용
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).shadowColor.withOpacity(0.05),
-                      blurRadius: 20, 
-                      offset: const Offset(0, 4)
+              // 헤드라인
+              Text(
+                '계정을 만들어\n시작해 보세요',
+                style: Theme.of(context).textTheme.displayLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm + 2),
+              Text(
+                '아이의 안전을 함께 지킬 보호자 계정을 등록해요',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
                     ),
-                  ],
+              ),
+
+              const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
+
+              // 이름
+              _FieldLabel(text: '이름'),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _nameController,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: '예: 김민지',
+                  prefixIcon: Icon(Icons.person_outline, size: 20),
                 ),
-                child: Column(
-                  children: [
-                    _buildTextField(context, _nameController, '이름', Icons.person_outline),
-                    const SizedBox(height: 16),
-                    _buildTextField(context, _emailController, '이메일 주소', Icons.mail_outline,
-                        keyboardType: TextInputType.emailAddress),
-                    const SizedBox(height: 16),
-                    _buildTextField(context, _passwordController, '비밀번호', Icons.lock_outline,
-                        obscureText: true),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _handleSignup,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // 이메일
+              _FieldLabel(text: '이메일'),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: 'name@example.com',
+                  prefixIcon: Icon(Icons.mail_outline, size: 20),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              // 비밀번호
+              _FieldLabel(text: '비밀번호'),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _handleSignup(),
+                decoration: InputDecoration(
+                  hintText: '8자 이상',
+                  prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Icon(
+                    Icons.shield_outlined,
+                    size: 14,
+                    color: cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '비밀번호는 다른 사람과 공유하지 마세요',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
-                        child: _isLoading
-                            ? SizedBox(
-                                height: 24,
-                                width: 24,
-                                child: CircularProgressIndicator(color: colorScheme.onPrimary, strokeWidth: 2),
-                              )
-                            : const Text('회원가입 완료',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // 회원가입 버튼
+              SoftButton(
+                label: _isLoading ? '가입 중...' : '회원가입 완료',
+                isLoading: _isLoading,
+                onPressed: _handleSignup,
               ),
             ],
           ),
@@ -160,31 +243,19 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
+}
 
-  Widget _buildTextField(
-    BuildContext context,
-    TextEditingController controller,
-    String label,
-    IconData icon, {
-    bool obscureText = false,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel({required this.text});
 
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-        prefixIcon: Icon(icon, color: colorScheme.onSurfaceVariant),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: colorScheme.primary, width: 2),
-        ),
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
     );
   }
 }

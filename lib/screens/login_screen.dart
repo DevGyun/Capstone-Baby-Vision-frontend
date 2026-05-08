@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/auth_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/common/common.dart';
 import '../widgets/custom_error_dialog.dart';
 import 'signup_screen.dart';
 
@@ -14,6 +17,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -22,128 +26,196 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // UI단에서는 함수 호출과 에러 핸들링만 담당합니다.
   void _attemptLogin() {
-    // 키보드 내리기
     FocusScope.of(context).unfocus();
 
     context.read<AuthProvider>().login(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-      onSuccess: () {
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, '/main');
-      },
-      onError: (errorMessage) {
-        if (!mounted) return;
-        // 새로 만든 에러 위젯(다시 시도 버튼 포함) 호출
-        CustomErrorDialog.show(
-          context, 
-          errorMessage,
-          onRetry: () => _attemptLogin(), // 실패 시 다시 시도
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          onSuccess: () {
+            if (!mounted) return;
+            Navigator.pushReplacementNamed(context, '/main');
+          },
+          onError: (errorMessage) {
+            if (!mounted) return;
+            CustomErrorDialog.show(
+              context,
+              errorMessage,
+              onRetry: _attemptLogin,
+            );
+          },
         );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    // Provider로부터 로딩 상태를 실시간으로 구독
+    final cs = Theme.of(context).colorScheme;
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 48.0),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xl + AppSpacing.md,
+            AppSpacing.lg,
+            AppSpacing.xl,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.visibility, color: Colors.blueAccent, size: 48),
-              const SizedBox(height: 16),
-              const Text('Eye Catch', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('우리아이 안심 모니터링', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 48),
-              
+              // 로고 박스
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.accentSoft(context),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.visibility_rounded,
+                  color: AppColors.accent,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              // 헤드라인
+              Text(
+                'Eye Catch에\n오신 걸 환영해요',
+                style: Theme.of(context).textTheme.displayLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm + 2),
+              Text(
+                '아이의 안전을 늘 함께 지켜볼게요',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
+
+              const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
+
+              // 이메일
+              _FieldLabel(text: '이메일'),
+              const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: '이메일 주소',
-                  prefixIcon: Icon(Icons.email_outlined, color: colorScheme.onSurfaceVariant),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: 'name@example.com',
+                  prefixIcon: Icon(Icons.email_outlined, size: 20),
                 ),
               ),
-              const SizedBox(height: 16),
-              
+              const SizedBox(height: AppSpacing.md),
+
+              // 비밀번호
+              _FieldLabel(text: '비밀번호'),
+              const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _passwordController,
-                obscureText: true,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _attemptLogin(),
                 decoration: InputDecoration(
-                  labelText: '비밀번호',
-                  prefixIcon: Icon(Icons.lock_outline, color: colorScheme.onSurfaceVariant),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 32),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _attemptLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  hintText: '비밀번호를 입력해 주세요',
+                  prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
-                  child: isLoading
-                      ? SizedBox(
-                          height: 24, width: 24,
-                          child: CircularProgressIndicator(color: colorScheme.onPrimary, strokeWidth: 2),
-                        )
-                      : const Text('로그인', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  // 커스텀 트랜지션 적용 (Slide & Fade)
-                  Navigator.push(
+
+              const SizedBox(height: AppSpacing.xl),
+
+              // 로그인 버튼
+              SoftButton(
+                label: isLoading ? '로그인 중...' : '로그인',
+                isLoading: isLoading,
+                onPressed: _attemptLogin,
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
+              // 회원가입 링크
+              Center(
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
                     context,
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const SignupScreen(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(1.0, 0.0); // 우측에서 시작
-                        const end = Offset.zero;        // 제자리
-                        const curve = Curves.easeInOutQuart; // 부드러운 가감속 커브
-
-                        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                        var offsetAnimation = animation.drive(tween);
-
+                      pageBuilder: (_, animation, __) => const SignupScreen(),
+                      transitionsBuilder: (_, animation, __, child) {
+                        const begin = Offset(1.0, 0.0);
+                        const end = Offset.zero;
+                        const curve = Curves.easeInOutQuart;
+                        final tween = Tween(begin: begin, end: end)
+                            .chain(CurveTween(curve: curve));
                         return SlideTransition(
-                          position: offsetAnimation,
+                          position: animation.drive(tween),
                           child: FadeTransition(
                             opacity: animation,
                             child: child,
                           ),
                         );
                       },
-                      transitionDuration: const Duration(milliseconds: 500), // 전환 속도 조절
+                      transitionDuration: const Duration(milliseconds: 500),
                     ),
-                  );
-                },
-                child: Text(
-                  '계정이 없으신가요? 회원가입',
-                  style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                      horizontal: AppSpacing.md,
+                    ),
+                    child: RichText(
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        children: [
+                          TextSpan(
+                            text: '계정이 없으신가요?  ',
+                            style: TextStyle(color: cs.onSurfaceVariant),
+                          ),
+                          const TextSpan(
+                            text: '회원가입',
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
     );
   }
 }
