@@ -216,6 +216,13 @@ class _MainScreenState extends State<MainScreen> {
   //   모니터링 화면 본문
   // ─────────────────────────────────────────────────────────────
   Widget _buildMonitoringView() {
+    final cameras = context.watch<CameraProvider>().cameras;
+
+    // ✅ 카메라가 0대일 경우, 대시보드 전체를 숨기고 기획안 형태의 꽉 찬 빈 화면 노출
+    if (cameras.isEmpty) {
+      return _buildNoCameraDashboard();
+    }
+
     return SafeArea(
       bottom: false,
       child: RefreshIndicator(
@@ -246,6 +253,141 @@ class _MainScreenState extends State<MainScreen> {
               _buildRecentLogsPanel(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //   ✅ 추가: 카메라가 없을 때 보여주는 전체 빈 화면 (HTML 기획안 반영)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildNoCameraDashboard() {
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 120),
+        child: Column(
+          children: [
+            _buildTopHeader(),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 아이콘 및 장식용 3D 빛 번짐(Blur) 효과
+                  Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.center,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerLow,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accent.withOpacity(0.06),
+                              blurRadius: 30,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.videocam_off_outlined,
+                          size: 64,
+                          color: cs.outlineVariant,
+                        ),
+                      ),
+                      // 상단 붉은색 장식
+                      Positioned(
+                        top: -8,
+                        right: -8,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            color: AppColors.dangerSoft(context),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: AppColors.dangerSoft(context), blurRadius: 10, spreadRadius: 5)
+                            ],
+                          ),
+                        ),
+                      ),
+                      // 하단 푸른색 장식
+                      Positioned(
+                        bottom: 16,
+                        left: -16,
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: AppColors.accentSoft(context),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: AppColors.accentSoft(context), blurRadius: 8, spreadRadius: 4)
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.xxl),
+                  Text(
+                    '연결된 카메라가 없어요',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    '아이의 안전을 실시간으로 확인하려면\n먼저 카메라를 등록해 주세요.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // 하단 액션 영역 (가이드 보기 + 카메라 추가)
+            Column(
+              children: [
+                TextButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('가이드를 준비 중입니다.')),
+                    );
+                  },
+                  icon: Icon(Icons.help_outline, size: 18, color: cs.outline),
+                  label: Text(
+                    '가이드 보기',
+                    style: TextStyle(color: cs.outline, fontWeight: FontWeight.w600),
+                  ),
+                  style: TextButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SoftButton(
+                  label: '카메라 추가하기',
+                  icon: Icons.add_circle,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AddCameraScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -407,10 +549,6 @@ class _MainScreenState extends State<MainScreen> {
   Widget _buildMainVideoCard() {
     final cs = Theme.of(context).colorScheme;
     final cameras = context.watch<CameraProvider>().cameras;
-
-    if (cameras.isEmpty) {
-      return _buildEmptyVideoCard();
-    }
 
     final safeIndex = _selectedCameraIndex.clamp(0, cameras.length - 1);
     final cam = cameras[safeIndex];
@@ -578,63 +716,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  //   카메라 0대일 때 빈 상태 카드
-  // ─────────────────────────────────────────────────────────────
-  Widget _buildEmptyVideoCard() {
-    final cs = Theme.of(context).colorScheme;
-
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: cs.outlineVariant, width: 0.5),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppColors.accentSoft(context),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.videocam_off_outlined,
-                    color: AppColors.accent,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm + 2),
-                Text(
-                  '연결된 카메라가 없어요',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '첫 카메라를 등록하고 아기를 지켜봐 주세요',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────
   //   카메라 썸네일 행 (가로 스크롤)
   // ─────────────────────────────────────────────────────────────
   Widget _buildThumbnailsRow() {
@@ -771,7 +852,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  //   통계 카드 2개 (간소화된 AI 카드 대체)
+  //   통계 카드 2개
   // ─────────────────────────────────────────────────────────────
   Widget _buildStatsCards() {
     final cameras = context.watch<CameraProvider>().cameras;

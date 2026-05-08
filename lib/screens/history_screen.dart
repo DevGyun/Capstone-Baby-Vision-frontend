@@ -75,10 +75,14 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                   )),
                 )
               else if (logs.isEmpty)
-                const EmptyStateView(
-                  icon: Icons.history_rounded,
-                  title: '아직 감지된 이벤트가 없어요',
-                  subtitle: '안전하게 모니터링 중입니다.', // <-- message를 subtitle로 수정했습니다!
+                // ✅ 이 부분을 수정했습니다: SizedBox로 감싸 가로 전체 공간을 확보합니다.
+                const SizedBox(
+                  width: double.infinity,
+                  child: EmptyStateView(
+                    icon: Icons.history_rounded,
+                    title: '아직 감지된 이벤트가 없어요',
+                    subtitle: '안전하게 모니터링 중입니다.',
+                  ),
                 )
               else
                 Column(

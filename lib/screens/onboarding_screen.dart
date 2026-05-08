@@ -22,7 +22,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  // 온보딩 완료 시 호출되는 함수 (기존 로직 유지)
+  // 온보딩 완료 시 호출되는 함수
   Future<void> _finishOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('hasSeenOnboarding', true);
@@ -52,7 +52,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             // 상단 건너뛰기 버튼 영역
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -69,6 +69,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             
             // 메인 콘텐츠 영역 (PageView)
+            // 화면이 작아도 유동적으로 줄어들 수 있게 Expanded로 감쌈
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -104,8 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             // 하단 인디케이터 및 버튼 영역
             Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.xl),
+              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
               child: Column(
+                mainAxisSize: MainAxisSize.min, // 남는 공간 최소화
                 children: [
                   // Progress Dots
                   Row(
@@ -114,16 +116,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       duration: const Duration(milliseconds: 300),
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       height: 8,
-                      width: _currentPage == index ? 32 : 8, // 활성화된 점은 길어집니다.
+                      width: _currentPage == index ? 32 : 8,
                       decoration: BoxDecoration(
                         color: _currentPage == index ? AppColors.accent : cs.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(AppRadius.sm),
                       ),
                     )),
                   ),
-                  const SizedBox(height: AppSpacing.xl),
+                  const SizedBox(height: AppSpacing.lg),
                   
-                  // Primary Action Button (기존 SoftButton 활용)
+                  // Primary Action Button
                   SoftButton(
                     label: _currentPage == 2 ? '시작하기' : '다음',
                     onPressed: _nextPage,
@@ -151,16 +153,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       child: Column(
         children: [
-          // 1. 일러스트 및 배경 빛(Blob) 효과 영역
+          // 1. 일러스트 및 배경 빛(Blob) 효과 영역 (반응형 적용)
           Expanded(
             flex: 5,
-            child: Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // 배경에 은은하게 퍼지는 빛 효과 (HTML의 blur-3xl 구현)
-                  Container(
-                    width: 220, height: 220,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // 배경에 은은하게 퍼지는 빛 효과 (화면 크기에 맞춰 자동 조절)
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    margin: const EdgeInsets.all(40), // 일러스트보다 약간 작게 마진
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: blobColor.withOpacity(0.15),
@@ -173,27 +176,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     ),
                   ),
-                  
-                  // 중앙 메인 이미지 (이미지가 없을 경우 아이콘 표시)
-                  Image.asset(
+                ),
+                
+                // 중앙 메인 이미지
+                // 고정된 height를 지우고 fit: BoxFit.contain 사용 -> 부모 영역을 넘지 않고 자동 축소됨
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: Image.asset(
                     imagePath,
-                    fit: BoxFit.contain,
-                    height: 280,
+                    fit: BoxFit.contain, 
                     errorBuilder: (context, error, stackTrace) => Column(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(fallbackIcon, size: 100, color: blobColor.withOpacity(0.7)),
+                        Icon(fallbackIcon, size: 80, color: blobColor.withOpacity(0.7)),
                         const SizedBox(height: AppSpacing.md),
                         Text('이미지 파일 필요\n($imagePath)', textAlign: TextAlign.center, style: TextStyle(color: cs.outline, fontSize: 12)),
                       ],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           
-          // 2. 텍스트 영역
+          // 2. 텍스트 영역 (크기 약간 조절하여 줄바꿈 안전성 확보)
           Expanded(
             flex: 3,
             child: Column(
@@ -202,18 +208,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    fontSize: 28,
+                    fontSize: 26, // 작은 화면을 위해 폰트 크기 살짝 줄임
                     fontWeight: FontWeight.w700,
                     height: 1.3,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: cs.onSurfaceVariant,
                     height: 1.5,
+                    fontSize: 15,
                   ),
                   textAlign: TextAlign.center,
                 ),
