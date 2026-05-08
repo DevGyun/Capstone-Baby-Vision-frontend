@@ -39,9 +39,6 @@ class NotificationService {
         ?.requestNotificationsPermission();
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 1. 기존 메인 스크린에서 사용하던 '테스트 알림' 복구 (오류 1 해결)
-  // ─────────────────────────────────────────────────────────────
   Future<void> showTestNotification({String? title, String? body}) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'baby_vision_channel',
@@ -56,7 +53,6 @@ class NotificationService {
       iOS: const DarwinNotificationDetails(),
     );
 
-    // ✅ 오류 2, 3 해결: id, title, body 모두 명명 인자(이름표) 붙임
     await flutterLocalNotificationsPlugin.show(
       id: 0,
       title: title ?? '🚨 이상 현상 감지 테스트',
@@ -65,9 +61,6 @@ class NotificationService {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 2. 화면이 꺼져있을 때 강제로 깨우는 '긴급 위험 알림' (새 기능)
-  // ─────────────────────────────────────────────────────────────
   Future<void> showUrgentNotification({String? title, String? body}) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'urgent_alert_channel',
