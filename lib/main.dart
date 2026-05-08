@@ -24,7 +24,11 @@ import 'theme/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // ✅ 1. 알림 서비스 초기화
   await NotificationService().init();
+  
+  // ✅ 2. 안드로이드 13+ 및 iOS 알림 권한 팝업 강제 요청 (추가된 부분!)
+  await NotificationService().requestPermissions();
 
   final prefs = await SharedPreferences.getInstance();
   final bool hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
@@ -40,7 +44,6 @@ void main() async {
   }
 
   runApp(
-    // 💡 앱 최상단에 MultiProvider를 감싸줍니다.
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
@@ -60,7 +63,6 @@ class EyeCatchApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 💡 테마 프로바이더의 상태를 실시간으로 감지합니다.
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
@@ -76,10 +78,6 @@ class EyeCatchApp extends StatelessWidget {
       ],
       locale: const Locale('ko', 'KR'),
 
-      // ── 새 디자인 시스템 적용 ──
-      // 기존 ColorScheme.fromSeed + GoogleFonts 직접 호출 코드를
-      // AppTheme.light() / AppTheme.dark()로 교체.
-      // 시스템 자동 전환은 themeProvider.themeMode가 처리.
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeProvider.themeMode,
