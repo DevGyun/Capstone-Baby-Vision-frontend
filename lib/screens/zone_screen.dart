@@ -1,10 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../config.dart';
 import '../providers/camera_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
@@ -43,28 +40,49 @@ class ZoneModel {
   }
 }
 
-/// 편집 가능한 다각형
 class _EditableZone {
   int? serverId;
   String label;
   List<Offset> points;
-  
-  // ✅ 새로 추가된 UI 상태 값들
-  int dangerLevel; // 0: 낮음, 1: 중간, 2: 높음
+
+  int dangerLevel;
   bool objectDetectionEnabled;
+
+  // ⬇️ 추가: 마지막으로 서버에서 받았을 때의 원본 스냅샷
+  String? _originalLabel;
+  List<Offset>? _originalPoints;
 
   _EditableZone({
     this.serverId,
     required this.label,
     required this.points,
-    this.dangerLevel = 2, // 기본값 높음
-    this.objectDetectionEnabled = true, // 기본값 켜짐
+    this.dangerLevel = 2,
+    this.objectDetectionEnabled = true,
   });
 
   bool get isCompleted => points.length >= 3;
 
   List<List<double>> toZonePoints() {
     return points.map((p) => [p.dx, p.dy]).toList();
+  }
+
+  /// 서버에서 받은 직후 호출 — 현재 값을 "원본"으로 저장
+  void markAsClean() {
+    _originalLabel = label;
+    _originalPoints = List<Offset>.from(points);
+  }
+
+  /// 서버에 이미 저장돼있고, 그 후로 수정됐는가
+  bool get isDirty {
+    if (serverId == null) return false;          // 신규
+    if (_originalLabel == null) return true;      // 비교 기준 없음 → 안전하게 dirty 취급
+    if (_originalLabel != label) return true;
+    if (_originalPoints == null) return true;
+    if (_originalPoints!.length != points.length) return true;
+    for (var i = 0; i < points.length; i++) {
+      if (_originalPoints![i] != points[i]) return true;
+    }
+    return false;
   }
 }
 
@@ -76,29 +94,35 @@ class ZoneScreen extends StatefulWidget {
 }
 
 class _ZoneScreenState extends State<ZoneScreen> {
+  
   int _selectedCameraIndex = 0;
   int? _currentLoadedCameraId;
   Size? _canvasSize;
   final List<_EditableZone> _zones = [];
+  final List<int> _pendingDeleteIds = [];
+  final TextEditingController _labelController = TextEditingController();
   int? _activeZoneIndex;
   int? _draggingZoneIndex;
   int? _draggingPointIndex;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isRefreshing = false;
+  bool get _hasUnsavedChanges {
+    if (_pendingDeleteIds.isNotEmpty) return true;
+    for (final z in _zones) {
+      if (z.serverId == null) return true;   // 신규
+      if (z.isDirty) return true;             // 수정
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _labelController.dispose();
+    super.dispose();
+  }
 
   static const double _handleHitRadius = 24;
-
-  Future<Map<String, String>?> _authHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('eyeCatchToken');
-    if (token == null) return null;
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-      'ngrok-skip-browser-warning': '69420',
-    };
-  }
 
   Offset? _toNormalized(Offset local) {
     final size = _canvasSize;
@@ -130,6 +154,7 @@ class _ZoneScreenState extends State<ZoneScreen> {
   setState(() {
     _isLoading = true;
     _zones.clear();
+    _pendingDeleteIds.clear();
     _activeZoneIndex = null;
   });
 
@@ -137,21 +162,25 @@ class _ZoneScreenState extends State<ZoneScreen> {
     final response = await ApiClient.request('GET', '/danger-zones/$cameraId');
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      final loaded = data
-          .map((e) => ZoneModel.fromJson(e as Map<String, dynamic>))
-          .map((m) => _EditableZone(
-                serverId: m.id,
-                label: m.label,
-                points: m.zonePoints,
-              ))
-          .toList();
-      setState(() {
-        _zones.addAll(loaded);
-        _currentLoadedCameraId = cameraId;
-        _isLoading = false;
-      });
-    } else {
+  final List<dynamic> data = jsonDecode(response.body);
+  final loaded = data
+      .map((e) => ZoneModel.fromJson(e as Map<String, dynamic>))
+      .map((m) {
+        final z = _EditableZone(
+          serverId: m.id,
+          label: m.label,
+          points: m.zonePoints,
+        );
+        z.markAsClean();   // ← 추가
+        return z;
+      })
+      .toList();
+  setState(() {
+    _zones.addAll(loaded);
+    _currentLoadedCameraId = cameraId;
+    _isLoading = false;
+  });
+} else {
       setState(() => _isLoading = false);
       _showSnack('위험구역을 불러오지 못했어요', isError: true);
     }
@@ -161,95 +190,130 @@ class _ZoneScreenState extends State<ZoneScreen> {
   }
 }
 
-  Future<void> _saveZones(int cameraId) async {
-    if (_isSaving) return;
+Future<void> _saveZones(int cameraId) async {
+  if (_isSaving) return;
 
-    final incomplete = _zones.where((z) => !z.isCompleted).toList();
-    if (incomplete.isNotEmpty) {
-      _showSnack('점이 3개 미만인 미완성 구역이 있어요', isError: true);
-      return;
-    }
-
-    setState(() => _isSaving = true);
-
-    try {
-      final headers = await _authHeaders();
-      if (headers == null) {
-        setState(() => _isSaving = false);
-        return;
-      }
-
-      final oldServerIds = _zones.where((z) => z.serverId != null).map((z) => z.serverId!).toList();
-      final List<int> newServerIds = [];
-      bool postFailed = false;
-
-      for (var i = 0; i < _zones.length; i++) {
-  final zone = _zones[i];
-  try {
-    final response = await ApiClient.request(
-      'POST', '/danger-zones',
-      body: {
-        'camera_id': cameraId,
-        'label': zone.label.isEmpty ? '위험 구역 ${i + 1}' : zone.label,
-        'zone_points': zone.toZonePoints(),
-      },
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      newServerIds.add(jsonDecode(response.body)['id']);
-    } else {
-      postFailed = true; break;
-    }
-  } catch (e) {
-    postFailed = true; break;
+  final incomplete = _zones.where((z) => !z.isCompleted).toList();
+  if (incomplete.isNotEmpty) {
+    _showSnack('점이 3개 미만인 미완성 구역이 있어요', isError: true);
+    return;
   }
-}
 
-      if (postFailed) {
-        setState(() => _isSaving = false);
-        _showSnack('저장에 실패했어요', isError: true);
-        return;
-      }
+  setState(() => _isSaving = true);
 
-      for (final id in oldServerIds) {
   try {
-    await ApiClient.request('DELETE', '/danger-zones/$id');
-  } catch (_) {}
-}
+    bool anyFailed = false;
+    String? failReason;
 
-      setState(() {
-        for (var i = 0; i < _zones.length && i < newServerIds.length; i++) {
-          _zones[i].serverId = newServerIds[i];
+    // 1) 삭제 — 화면에서 지운 것들
+    for (final id in _pendingDeleteIds) {
+      try {
+        final r = await ApiClient.request('DELETE', '/danger-zones/$id');
+        if (r.statusCode != 200 && r.statusCode != 204) {
+          anyFailed = true;
+          failReason = '구역 삭제 실패 (${r.statusCode})';
         }
-        _isSaving = false;
-        _activeZoneIndex = null;
-      });
-
-      _showSnack('위험구역이 안전하게 저장되었어요', isError: false);
-    } catch (e) {
-      setState(() => _isSaving = false);
-      _showSnack('저장에 실패했어요', isError: true);
+      } catch (e) {
+        anyFailed = true;
+        failReason = '구역 삭제 중 네트워크 오류';
+      }
     }
-  }
 
-  void _startNewZone() {
-    setState(() {
-      _zones.add(_EditableZone(label: '위험 구역 ${_zones.length + 1}', points: []));
-      _activeZoneIndex = _zones.length - 1;
-    });
-  }
+    // 2) 신규 + 수정
+    for (var i = 0; i < _zones.length; i++) {
+      final zone = _zones[i];
+      final labelToSave =
+          zone.label.isEmpty ? '위험 구역 ${i + 1}' : zone.label;
 
-  void _finishCurrentZone() {
-    final idx = _activeZoneIndex;
-    if (idx == null) return;
-    if (!_zones[idx].isCompleted) {
-      _showSnack('구역을 완성하려면 최소 3개의 점이 필요합니다.', isError: true);
-      return;
+      try {
+        if (zone.serverId == null) {
+          // 신규 → POST
+          final r = await ApiClient.request(
+            'POST', '/danger-zones',
+            body: {
+              'camera_id': cameraId,
+              'label': labelToSave,
+              'zone_points': zone.toZonePoints(),
+            },
+          );
+          if (r.statusCode == 200 || r.statusCode == 201) {
+            final newId = jsonDecode(r.body)['id'] as int;
+            zone.serverId = newId;
+            zone.label = labelToSave;
+            zone.markAsClean();
+          } else {
+            anyFailed = true;
+            failReason = '구역 생성 실패 (${r.statusCode})';
+          }
+        } else if (zone.isDirty) {
+          // 수정 → PUT
+          final r = await ApiClient.request(
+            'PUT', '/danger-zones/${zone.serverId}',
+            body: {
+              'label': labelToSave,
+              'zone_points': zone.toZonePoints(),
+            },
+          );
+          if (r.statusCode == 200) {
+            zone.label = labelToSave;
+            zone.markAsClean();
+          } else {
+            anyFailed = true;
+            failReason = '구역 수정 실패 (${r.statusCode})';
+          }
+        }
+        // 변경 없는 기존 구역은 그냥 건너뜀
+      } catch (e) {
+        anyFailed = true;
+        failReason = '저장 중 네트워크 오류';
+      }
     }
+
+    // 3) 정리
     setState(() {
-      _zones[idx].serverId = null;
+      _pendingDeleteIds.clear();
+      _isSaving = false;
       _activeZoneIndex = null;
     });
+
+    if (anyFailed) {
+      _showSnack(failReason ?? '일부 저장에 실패했어요', isError: true);
+    } else {
+      _showSnack('위험구역이 안전하게 저장되었어요', isError: false);
+    }
+  } catch (e) {
+    setState(() => _isSaving = false);
+    _showSnack('저장에 실패했어요', isError: true);
   }
+}
+
+void _startNewZone() {
+  setState(() {
+    _zones.add(_EditableZone(label: '위험 구역 ${_zones.length + 1}', points: []));
+    _activeZoneIndex = _zones.length - 1;
+    _labelController.text = _zones[_activeZoneIndex!].label;
+  });
+}
+
+void _editZone(int index) {
+  setState(() {
+    _activeZoneIndex = index;
+    _labelController.text = _zones[index].label;
+  });
+}
+
+void _finishCurrentZone() {
+  final idx = _activeZoneIndex;
+  if (idx == null) return;
+  if (!_zones[idx].isCompleted) {
+    _showSnack('구역을 완성하려면 최소 3개의 점이 필요합니다.', isError: true);
+    return;
+  }
+  setState(() {
+    // serverId는 절대 건드리지 않음 — null이면 신규로 남고, 있으면 PUT 대상
+    _activeZoneIndex = null;
+  });
+}
 
   void _undoLastPoint() {
     final idx = _activeZoneIndex;
@@ -261,21 +325,32 @@ class _ZoneScreenState extends State<ZoneScreen> {
     setState(() => _zones[idx].points.removeLast());
   }
 
-  void _removeZone(int index) {
-    setState(() {
-      _zones.removeAt(index);
-      if (_activeZoneIndex == index) _activeZoneIndex = null;
-      else if (_activeZoneIndex != null && _activeZoneIndex! > index) _activeZoneIndex = _activeZoneIndex! - 1;
-    });
-  }
+void _removeZone(int index) {
+  setState(() {
+    final removed = _zones.removeAt(index);
+    if (removed.serverId != null) {
+      _pendingDeleteIds.add(removed.serverId!);   // ← 추가
+    }
+    if (_activeZoneIndex == index) _activeZoneIndex = null;
+    else if (_activeZoneIndex != null && _activeZoneIndex! > index) {
+      _activeZoneIndex = _activeZoneIndex! - 1;
+    }
+  });
+}
 
   void _editZone(int index) {
     setState(() => _activeZoneIndex = index);
   }
 
-  void _clearAll() {
-    setState(() { _zones.clear(); _activeZoneIndex = null; });
-  }
+void _clearAll() {
+  setState(() {
+    for (final z in _zones) {
+      if (z.serverId != null) _pendingDeleteIds.add(z.serverId!);
+    }
+    _zones.clear();
+    _activeZoneIndex = null;
+  });
+}
 
   Future<void> _refreshSnapshot() async {
     setState(() => _isRefreshing = true);
@@ -444,17 +519,21 @@ class _ZoneScreenState extends State<ZoneScreen> {
               Text('구역 이름', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500)),
               const SizedBox(height: AppSpacing.sm),
               TextField(
-                onChanged: (val) => setState(() => activeZone.label = val),
-                decoration: InputDecoration(
-                  hintText: '예: 주방 가스레인지, 베란다',
-                  filled: true,
-                  fillColor: cs.surfaceContainerLowest,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppRadius.md), borderSide: BorderSide.none),
-                ),
-                controller: TextEditingController(text: activeZone.label)..selection = TextSelection.fromPosition(TextPosition(offset: activeZone.label.length)),
-              ),
-            ],
-          ),
+  controller: _labelController,
+  onChanged: (val) {
+  activeZone.label = val;
+  setState(() {});   // 빈 setState — 버튼 상태만 갱신
+},  // setState 안 함 (controller가 알아서 처리)
+  decoration: InputDecoration(
+    hintText: '예: 주방 가스레인지, 베란다',
+    filled: true,
+    fillColor: cs.surfaceContainerLowest,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide.none,
+    ),
+  ),
+),
           const SizedBox(height: AppSpacing.md),
 
           // 2. 위험 수위 버튼 (낮음, 중간, 높음)
@@ -531,8 +610,15 @@ class _ZoneScreenState extends State<ZoneScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_zones.isNotEmpty) ...[
-          Wrap(
+        if (_zones.isNotEmpty) ...[Align(
+    alignment: Alignment.centerRight,
+    child: TextButton.icon(
+      icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+      label: const Text('전체 지우기'),
+      onPressed: _isSaving ? null : _clearAll,
+    ),
+  ),
+  Wrap(
             spacing: AppSpacing.sm, runSpacing: AppSpacing.sm,
             children: List.generate(_zones.length, (i) => _ZoneEditChip(
               label: _zones[i].label, pointCount: _zones[i].points.length,
@@ -555,7 +641,9 @@ class _ZoneScreenState extends State<ZoneScreen> {
               flex: 2,
               child: FilledButton.icon(
                 icon: const Icon(Icons.save), label: const Text('서버에 저장'),
-                onPressed: (_isSaving || cameras.isEmpty) ? null : () => _saveZones(cameras[_selectedCameraIndex].id),
+                onPressed: (_isSaving || cameras.isEmpty || !_hasUnsavedChanges)
+    ? null
+    : () => _saveZones(cameras[_selectedCameraIndex].id),
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
               ),
             ),
