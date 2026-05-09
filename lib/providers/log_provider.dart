@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../config.dart';
+import '../services/api_client.dart';
 
 // 백엔드 GET /alerts 응답에 맞춰 정의
 // 응답 예: {id, message, is_read, sent_at, zone_name, confidence, detected_at}
@@ -64,35 +62,13 @@ class LogProvider extends ChangeNotifier {
   List<IncidentLog> get logs => _logs;
   bool get isLoading => _isLoading;
 
-  Future<Map<String, String>?> _authHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('eyeCatchToken');
-    if (token == null) return null;
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-      'ngrok-skip-browser-warning': '69420',
-    };
-  }
+  // _authHeaders() 메서드 삭제
 
-  // ── 알림 목록 조회 ── GET /alerts
   Future<void> fetchAlerts() async {
     _isLoading = true;
     notifyListeners();
-
     try {
-      final headers = await _authHeaders();
-      if (headers == null) {
-        _isLoading = false;
-        notifyListeners();
-        return;
-      }
-
-      final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/alerts'),
-        headers: headers,
-      );
-
+      final response = await ApiClient.request('GET', '/alerts');
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         _logs = data.map((e) => IncidentLog.fromJson(e)).toList();
@@ -101,32 +77,23 @@ class LogProvider extends ChangeNotifier {
       }
     } catch (e) {
       print('알림 목록 에러: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
-  // ── 읽음 처리 ── PATCH /alerts/{id}/read
   Future<void> markAsRead(int alertId) async {
     try {
-      final headers = await _authHeaders();
-      if (headers == null) return;
-
-      final response = await http.patch(
-        Uri.parse('${AppConfig.baseUrl}/alerts/$alertId/read'),
-        headers: headers,
-      );
-
+      final response = await ApiClient.request('PATCH', '/alerts/$alertId/read');
       if (response.statusCode == 200) {
-        await fetchAlerts(); // 목록 다시 받아오기
+        await fetchAlerts();
       }
     } catch (e) {
       print('읽음 처리 에러: $e');
     }
   }
 
-  // 로컬 푸시 도착 시 즉시 추가용 (서버 동기화는 fetchAlerts로)
   void addLog(IncidentLog newLog) {
     _logs.insert(0, newLog);
     notifyListeners();

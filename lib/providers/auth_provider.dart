@@ -33,27 +33,29 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final token = data['access_token'];
+  final data = jsonDecode(response.body);
+  final accessToken = data['access_token'];
+  final refreshToken = data['refresh_token'];  // ← 같이 저장
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('eyeCatchToken', token);
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('eyeCatchToken', accessToken);
+  await prefs.setString('eyeCatchRefreshToken', refreshToken);  // ← 추가
 
-        final userResponse = await http.get(
-          Uri.parse('${AppConfig.baseUrl}/users/me'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'ngrok-skip-browser-warning': '69420',
-          },
-        );
+  final userResponse = await http.get(
+    Uri.parse('${AppConfig.baseUrl}/users/me'),
+    headers: {
+      'Authorization': 'Bearer $accessToken',
+      'ngrok-skip-browser-warning': '69420',
+    },
+  );
 
-        if (userResponse.statusCode == 200) {
-          await prefs.setString('eyeCatchUser', userResponse.body);
-          onSuccess();
-        } else {
-          onError('유저 정보를 불러올 수 없습니다.');
-        }
-      } else {
+  if (userResponse.statusCode == 200) {
+    await prefs.setString('eyeCatchUser', userResponse.body);
+    onSuccess();
+  } else {
+    onError('유저 정보를 불러올 수 없습니다.');
+  }
+} else {
         final errorData = jsonDecode(response.body);
         onError(errorData['detail'] ?? '이메일 또는 비밀번호가 틀렸습니다.');
       }

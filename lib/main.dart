@@ -21,6 +21,8 @@ import 'services/notification_service.dart';
 // 디자인 시스템
 import 'theme/app_theme.dart';
 
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -66,6 +68,7 @@ class EyeCatchApp extends StatelessWidget {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp(
+      navigatorKey: appNavigatorKey,
       title: 'Eye Catch',
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

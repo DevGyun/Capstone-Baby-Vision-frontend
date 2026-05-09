@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/settings_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
+import 'add_camera_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -139,16 +139,16 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text('기기 연동', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
-            _buildListTile(context, '브릿지 연동 토큰 복사', '카메라 기기 최초 설정 시 필요합니다', Icons.copy, onTap: () async {
-              final prefs = await SharedPreferences.getInstance();
-              final token = prefs.getString('eyeCatchToken');
-              if (token != null && token.isNotEmpty) {
-                await Clipboard.setData(ClipboardData(text: token));
-                if (context.mounted) _showSnack(context, '브릿지 연동 토큰이 클립보드에 복사되었습니다.');
-              } else {
-                if (context.mounted) _showSnack(context, '토큰을 찾을 수 없습니다. 다시 로그인해주세요.', isError: true);
-              }
-            }),
+            _buildListTile(
+            context,
+            '카메라 추가하기',
+            '라즈베리파이 화면에 표시된 6자리 코드를 입력해 연결해요',
+            Icons.add_a_photo_outlined,
+            onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddCameraScreen()),
+              ),
+            ),
 
             const SizedBox(height: AppSpacing.lg),
             Text('환경 설정', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),

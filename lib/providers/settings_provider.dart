@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
+import '../services/api_client.dart';
 
 class SettingsProvider extends ChangeNotifier {
   String _profileName = '보호자';
@@ -48,6 +49,7 @@ class SettingsProvider extends ChangeNotifier {
   Future<void> logout(Function onSuccess) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('eyeCatchToken');
+    await prefs.remove('eyeCatchRefreshToken');  
     await prefs.remove('eyeCatchUser');
     onSuccess();
   }
@@ -104,60 +106,48 @@ class SettingsProvider extends ChangeNotifier {
     bool isSuccess = true;
 
     try {
-      // 1. 이름 변경 (PATCH /users/me) - 이름이 바뀌었을 때만 따로 요청
-      if (newName.isNotEmpty && newName != _profileName) {
-        final nameResponse = await http.patch(
-          Uri.parse('${AppConfig.baseUrl}/users/me'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-            'ngrok-skip-browser-warning': '69420',
-          },
-          body: jsonEncode({'name': newName}),
-        );
+      // 1. 이름 변경
+if (newName.isNotEmpty && newName != _profileName) {
+  final nameResponse = await ApiClient.request(
+    'PATCH', '/users/me',
+    body: {'name': newName},
+  );
 
-        if (nameResponse.statusCode == 200) {
-          // 이름 수정 성공 시 로컬 기기 데이터도 업데이트
-          final userDataString = prefs.getString('eyeCatchUser');
-          if (userDataString != null) {
-            final userData = jsonDecode(userDataString) as Map<String, dynamic>;
-            userData['name'] = newName;
-            await prefs.setString('eyeCatchUser', jsonEncode(userData));
-            _profileName = newName;
-          }
-        } else {
-          onError('이름 변경에 실패했습니다.');
-          isSuccess = false;
-        }
-      }
+  if (nameResponse.statusCode == 200) {
+    final userDataString = prefs.getString('eyeCatchUser');
+    if (userDataString != null) {
+      final userData = jsonDecode(userDataString) as Map<String, dynamic>;
+      userData['name'] = newName;
+      await prefs.setString('eyeCatchUser', jsonEncode(userData));
+      _profileName = newName;
+    }
+  } else {
+    onError('이름 변경에 실패했습니다.');
+    isSuccess = false;
+  }
+}
 
-      // 2. 비밀번호 변경 (PATCH /users/me/password) - 새 비밀번호가 입력됐을 때 따로 요청
-      if (newPassword.isNotEmpty && isSuccess) {
-        if (_tempCurrentPassword == null) {
-          onError('인증이 만료되었습니다. 다시 비밀번호를 확인해주세요.');
-          isSuccess = false;
-        } else {
-          final passResponse = await http.patch(
-            Uri.parse('${AppConfig.baseUrl}/users/me/password'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-              'ngrok-skip-browser-warning': '69420',
-            },
-            // 💡 백엔드 스키마가 요구하는 2개의 값 모두 전송
-            body: jsonEncode({
-              'current_password': _tempCurrentPassword,
-              'new_password': newPassword
-            }),
-          );
+// 2. 비밀번호 변경
+if (newPassword.isNotEmpty && isSuccess) {
+  if (_tempCurrentPassword == null) {
+    onError('인증이 만료되었습니다. 다시 비밀번호를 확인해주세요.');
+    isSuccess = false;
+  } else {
+    final passResponse = await ApiClient.request(
+      'PATCH', '/users/me/password',
+      body: {
+        'current_password': _tempCurrentPassword,
+        'new_password': newPassword,
+      },
+    );
 
-          if (passResponse.statusCode != 200) {
-            final errorData = jsonDecode(passResponse.body);
-            onError(errorData['detail'] ?? '비밀번호 변경에 실패했습니다. (8자리 이상 입력)');
-            isSuccess = false;
-          }
-        }
-      }
+    if (passResponse.statusCode != 200) {
+      final errorData = jsonDecode(passResponse.body);
+      onError(errorData['detail'] ?? '비밀번호 변경에 실패했습니다. (8자리 이상 입력)');
+      isSuccess = false;
+    }
+  }
+}
     } catch (e) {
       onError('서버와의 통신에 실패했습니다.');
       isSuccess = false;

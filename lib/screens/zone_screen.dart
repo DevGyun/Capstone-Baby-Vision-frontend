@@ -9,6 +9,7 @@ import '../providers/camera_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/polygon_painter.dart';
+import '../services/api_client.dart';
 
 /// 백엔드 위험구역 모델.
 class ZoneModel {
@@ -125,48 +126,40 @@ class _ZoneScreenState extends State<ZoneScreen> {
   }
 
   Future<void> _loadZones(int cameraId) async {
-    if (_canvasSize == null) return;
-    setState(() {
-      _isLoading = true;
-      _zones.clear();
-      _activeZoneIndex = null;
-    });
+  if (_canvasSize == null) return;
+  setState(() {
+    _isLoading = true;
+    _zones.clear();
+    _activeZoneIndex = null;
+  });
 
-    try {
-      final headers = await _authHeaders();
-      if (headers == null) {
-        setState(() => _isLoading = false);
-        return;
-      }
-      final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/danger-zones/$cameraId'),
-        headers: headers,
-      );
+  try {
+    final response = await ApiClient.request('GET', '/danger-zones/$cameraId');
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        final loaded = data
-            .map((e) => ZoneModel.fromJson(e as Map<String, dynamic>))
-            .map((m) => _EditableZone(
-                  serverId: m.id,
-                  label: m.label,
-                  points: m.zonePoints,
-                ))
-            .toList();
-        setState(() {
-          _zones.addAll(loaded);
-          _currentLoadedCameraId = cameraId;
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
-        _showSnack('위험구역을 불러오지 못했어요', isError: true);
-      }
-    } catch (e) {
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      final loaded = data
+          .map((e) => ZoneModel.fromJson(e as Map<String, dynamic>))
+          .map((m) => _EditableZone(
+                serverId: m.id,
+                label: m.label,
+                points: m.zonePoints,
+              ))
+          .toList();
+      setState(() {
+        _zones.addAll(loaded);
+        _currentLoadedCameraId = cameraId;
+        _isLoading = false;
+      });
+    } else {
       setState(() => _isLoading = false);
-      _showSnack('네트워크 오류로 구역을 불러오지 못했어요', isError: true);
+      _showSnack('위험구역을 불러오지 못했어요', isError: true);
     }
+  } catch (e) {
+    setState(() => _isLoading = false);
+    _showSnack('네트워크 오류로 구역을 불러오지 못했어요', isError: true);
   }
+}
 
   Future<void> _saveZones(int cameraId) async {
     if (_isSaving) return;
@@ -191,29 +184,25 @@ class _ZoneScreenState extends State<ZoneScreen> {
       bool postFailed = false;
 
       for (var i = 0; i < _zones.length; i++) {
-        final zone = _zones[i];
-        try {
-          // TODO: 백엔드 API가 업데이트되면 dangerLevel, objectDetection 값을 body에 추가하세요.
-          final response = await http.post(
-            Uri.parse('${AppConfig.baseUrl}/danger-zones'),
-            headers: headers,
-            body: jsonEncode({
-              'camera_id': cameraId,
-              'label': zone.label.isEmpty ? '위험 구역 ${i + 1}' : zone.label,
-              'zone_points': zone.toZonePoints(),
-              // 'danger_level': zone.dangerLevel,
-              // 'object_detection': zone.objectDetectionEnabled,
-            }),
-          );
-          if (response.statusCode == 200 || response.statusCode == 201) {
-            newServerIds.add(jsonDecode(response.body)['id']);
-          } else {
-            postFailed = true; break;
-          }
-        } catch (e) {
-          postFailed = true; break;
-        }
-      }
+  final zone = _zones[i];
+  try {
+    final response = await ApiClient.request(
+      'POST', '/danger-zones',
+      body: {
+        'camera_id': cameraId,
+        'label': zone.label.isEmpty ? '위험 구역 ${i + 1}' : zone.label,
+        'zone_points': zone.toZonePoints(),
+      },
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      newServerIds.add(jsonDecode(response.body)['id']);
+    } else {
+      postFailed = true; break;
+    }
+  } catch (e) {
+    postFailed = true; break;
+  }
+}
 
       if (postFailed) {
         setState(() => _isSaving = false);
@@ -222,8 +211,10 @@ class _ZoneScreenState extends State<ZoneScreen> {
       }
 
       for (final id in oldServerIds) {
-        try { await http.delete(Uri.parse('${AppConfig.baseUrl}/danger-zones/$id'), headers: headers); } catch (_) {}
-      }
+  try {
+    await ApiClient.request('DELETE', '/danger-zones/$id');
+  } catch (_) {}
+}
 
       setState(() {
         for (var i = 0; i < _zones.length && i < newServerIds.length; i++) {
