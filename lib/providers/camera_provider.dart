@@ -61,30 +61,6 @@ class CameraProvider with ChangeNotifier {
     return null;
   }
 
-  // ── 카메라 등록 (구버전 — 안 쓰면 삭제 가능) ──
-  Future<bool> registerCamera(String name) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final response = await ApiClient.request(
-        'POST', '/cameras',
-        body: {'name': name},
-      );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        await fetchCameras();
-        return true;
-      }
-      print('카메라 등록 실패: ${response.statusCode} ${response.body}');
-      return false;
-    } catch (e) {
-      print('카메라 등록 에러: $e');
-      return false;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
   // ── 페어링 ──
   Future<bool> pairCamera({
     required String pairingCode,
