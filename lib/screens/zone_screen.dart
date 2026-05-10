@@ -548,7 +548,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             ),
             child: _buildBottomControls(cameras),
           ),
-          const SizedBox(height: 60),
+          SizedBox(height: 60 + MediaQuery.of(context).padding.bottom),
         ],
       ),
     );

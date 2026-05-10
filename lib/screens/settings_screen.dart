@@ -202,7 +202,12 @@ class SettingsScreen extends StatelessWidget {
         elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+  padding: EdgeInsets.fromLTRB(
+    AppSpacing.lg,
+    AppSpacing.lg,
+    AppSpacing.lg,
+    120 + MediaQuery.of(context).padding.bottom, // 플로팅 네비 + 시스템 네비
+  ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

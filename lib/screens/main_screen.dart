@@ -245,55 +245,60 @@ void _onItemTapped(int index) => setState(() => _selectedIndex = index);
   // ─────────────────────────────────────────────────────────────
   //   루트 빌드
   // ─────────────────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+@override
+Widget build(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
 
-    // 페어링 직후 한 번만 SnackBar 표시
-    final justPaired = context.watch<CameraProvider>().justPairedCameraName;
-    if (justPaired != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _maybeShowJustPairedSnack();
-      });
-    }
+  // 시스템 네비게이션 바 영역 (Android 제스처/3버튼)
+  final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            color: cs.surface,
-            child: Stack(
-              children: [
-                IndexedStack(
-                  index: _selectedIndex,
-                  children: [
-                    _buildMonitoringView(),
-                    const ZoneScreen(),
-                    const HistoryScreen(),
-                    const SettingsScreen(),
-                  ],
-                ),
-                Positioned(
-                  bottom: 110,
-                  right: AppSpacing.lg,
-                  child: _buildTestNotificationFab(),
-                ),
-                Positioned(
-                  bottom: AppSpacing.lg,
-                  left: AppSpacing.lg,
-                  right: AppSpacing.lg,
-                  child: _buildFloatingNavBar(),
-                ),
-              ],
-            ),
+  final justPaired = context.watch<CameraProvider>().justPairedCameraName;
+  if (justPaired != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _maybeShowJustPairedSnack();
+    });
+  }
+
+  return Scaffold(
+    backgroundColor: Colors.black,
+    // ✨ resizeToAvoidBottomInset: 키보드 올라올 때 자동 스크롤
+    resizeToAvoidBottomInset: true,
+    body: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Container(
+          color: cs.surface,
+          child: Stack(
+            children: [
+              IndexedStack(
+                index: _selectedIndex,
+                children: [
+                  _buildMonitoringView(),
+                  const ZoneScreen(),
+                  const HistoryScreen(),
+                  const SettingsScreen(),
+                ],
+              ),
+              // 테스트 알림 FAB — 시스템 네비를 피해서 위로 올림
+              Positioned(
+                bottom: 110 + bottomInset,
+                right: AppSpacing.lg,
+                child: _buildTestNotificationFab(),
+              ),
+              // 플로팅 네비 — 시스템 네비를 피해서 위로 올림
+              Positioned(
+                bottom: AppSpacing.lg + bottomInset,
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+                child: _buildFloatingNavBar(),
+              ),
+            ],
           ),
         ),
       ),
-    );
-  }
-
+    ),
+  );
+}
   Widget _buildMonitoringView() {
     final cameras = context.watch<CameraProvider>().cameras;
 
@@ -311,12 +316,12 @@ void _onItemTapped(int index) => setState(() => _selectedIndex = index);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            120,
-          ),
+          padding: EdgeInsets.fromLTRB(
+  AppSpacing.lg,
+  AppSpacing.sm,
+  AppSpacing.lg,
+  120 + MediaQuery.of(context).padding.bottom,
+),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -342,8 +347,12 @@ void _onItemTapped(int index) => setState(() => _selectedIndex = index);
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 120),
+        padding: EdgeInsets.fromLTRB(
+  AppSpacing.lg,
+  AppSpacing.sm,
+  AppSpacing.lg,
+  120 + MediaQuery.of(context).padding.bottom,
+),
         child: Column(
           children: [
             _buildTopHeader(),

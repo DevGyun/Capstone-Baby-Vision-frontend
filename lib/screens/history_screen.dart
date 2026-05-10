@@ -60,7 +60,12 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         onRefresh: () => context.read<LogProvider>().fetchAlerts(),
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(left: AppSpacing.lg, right: AppSpacing.lg, top: AppSpacing.lg, bottom: 120),
+          padding: EdgeInsets.only(
+  left: AppSpacing.lg,
+  right: AppSpacing.lg,
+  top: AppSpacing.lg,
+  bottom: 120 + MediaQuery.of(context).padding.bottom,
+),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
