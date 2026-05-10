@@ -66,6 +66,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     return;
   }
 
+
   final provider = context.read<CameraProvider>();
   final success = await provider.pairCamera(
     pairingCode: _codeController.text.trim(),
@@ -81,6 +82,34 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
   } else {
     _showSnack(provider.lastErrorMessage ?? '연결에 실패했어요', isError: true);
   }
+}
+  /// 클립보드에서 6자리 코드 가져와서 입력 필드에 붙여넣기.
+Future<void> _pasteFromClipboard() async {
+  final data = await Clipboard.getData(Clipboard.kTextPlain);
+  final text = data?.text ?? '';
+
+  // 숫자만 추출
+  final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
+
+  if (digits.isEmpty) {
+    _showSnack('클립보드에 숫자가 없어요', isError: true);
+    return;
+  }
+
+  if (digits.length < 6) {
+    _showSnack('6자리 숫자가 필요해요', isError: true);
+    return;
+  }
+
+  // 6자리만 사용
+  final code = digits.substring(0, 6);
+  _codeController.text = code;
+  _codeController.selection = TextSelection.fromPosition(
+    TextPosition(offset: code.length),
+  );
+  FocusScope.of(context).unfocus();
+
+  _showSnack('코드를 붙여넣었어요', isError: false);
 }
 
   void _showSnack(String message, {required bool isError}) {
@@ -175,29 +204,55 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
               const SizedBox(height: AppSpacing.lg),
 
               // ── 페어링 코드 ──
-              Row(
-                children: [
-                  _FieldLabel(text: '페어링 코드'),
-                  const Spacer(),
-                  // 6자리 입력 진행 표시 (5/6, 6/6 등)
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
-                    child: _codeController.text.isEmpty
-                        ? const SizedBox.shrink()
-                        : Text(
-                            '${_codeController.text.length}/6',
-                            key: ValueKey(_codeController.text.length),
-                            style:
-                                Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: _codeController.text.length == 6
-                                          ? AppColors.accent
-                                          : cs.onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                          ),
+// ── 페어링 코드 ──
+Row(
+  children: [
+    _FieldLabel(text: '페어링 코드'),
+    const Spacer(),
+    // 6자리 입력 진행 표시 (5/6, 6/6 등)
+    AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: _codeController.text.isEmpty
+          ? const SizedBox.shrink()
+          : Text(
+              '${_codeController.text.length}/6',
+              key: ValueKey(_codeController.text.length),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: _codeController.text.length == 6
+                        ? AppColors.accent
+                        : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
+            ),
+    ),
+    const SizedBox(width: AppSpacing.sm),
+    // 붙여넣기 버튼
+    InkWell(
+      onTap: _pasteFromClipboard,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.content_paste_rounded,
+                size: 14, color: AppColors.accent),
+            const SizedBox(width: 4),
+            Text(
+              '붙여넣기',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.accent,
               ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  ],
+),
               const SizedBox(height: AppSpacing.sm),
               _PairingCodeField(
                 controller: _codeController,

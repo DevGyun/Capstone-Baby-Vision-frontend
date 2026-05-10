@@ -1,14 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 
 // 화면들
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/onboarding_screen.dart';
 
-// 프로바이더들 (상태 관리)
+// 프로바이더들
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/settings_provider.dart';
@@ -21,28 +23,102 @@ import 'services/notification_service.dart';
 // 디자인 시스템
 import 'theme/app_theme.dart';
 
+// 설정
+import 'config.dart';
+
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
+/// 시작 시 access token이 정말 유효한지 검증.
+/// 만료됐다면 refresh token으로 새로 받기까지 시도.
+/// 모두 실패하면 토큰 정리하고 false 반환.
+Future<bool> _hasValidSession() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('eyeCatchToken');
+  if (token == null || token.isEmpty) return false;
+
+  try {
+    final response = await http.get(
+      Uri.parse('${AppConfig.baseUrl}/users/me'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': '69420',
+      },
+    ).timeout(const Duration(seconds: 5));
+
+    if (response.statusCode == 200) {
+      // 유저 정보도 같이 갱신해두면 메인 진입 시 빠름
+      await prefs.setString('eyeCatchUser', response.body);
+      return true;
+    }
+
+    if (response.statusCode == 401) {
+      // access 만료 → refresh 시도
+      return await _tryRefresh();
+    }
+
+    // 그 외 에러는 일단 토큰은 살려두고 메인으로 (네트워크 일시 장애 가능)
+    return true;
+  } catch (e) {
+    // 타임아웃/네트워크 에러는 토큰 살려둠 — 사용자가 오프라인일 수 있음
+    print('세션 검증 중 네트워크 에러: $e');
+    return true;
+  }
+}
+
+Future<bool> _tryRefresh() async {
+  final prefs = await SharedPreferences.getInstance();
+  final refresh = prefs.getString('eyeCatchRefreshToken');
+  if (refresh == null || refresh.isEmpty) {
+    await _clearTokens();
+    return false;
+  }
+
+  try {
+    final response = await http.post(
+      Uri.parse('${AppConfig.baseUrl}/users/refresh'),
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': '69420',
+      },
+      body: jsonEncode({'refresh_token': refresh}),
+    ).timeout(const Duration(seconds: 5));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      await prefs.setString('eyeCatchToken', data['access_token']);
+      await prefs.setString('eyeCatchRefreshToken', data['refresh_token']);
+      return true;
+    }
+  } catch (e) {
+    print('Refresh 토큰 검증 에러: $e');
+  }
+
+  // refresh도 실패 → 깔끔하게 정리
+  await _clearTokens();
+  return false;
+}
+
+Future<void> _clearTokens() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('eyeCatchToken');
+  await prefs.remove('eyeCatchRefreshToken');
+  await prefs.remove('eyeCatchUser');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // ✅ 1. 알림 서비스 초기화
+
   await NotificationService().init();
-  
-  // ✅ 2. 안드로이드 13+ 및 iOS 알림 권한 팝업 강제 요청 (추가된 부분!)
   await NotificationService().requestPermissions();
 
   final prefs = await SharedPreferences.getInstance();
   final bool hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
-  final String? token = prefs.getString('eyeCatchToken');
-  
+
   String initialRoute = '/onboarding';
   if (hasSeenOnboarding) {
-    if (token != null && token.isNotEmpty) {
-      initialRoute = '/main';
-    } else {
-      initialRoute = '/login';
-    }
+    // ✨ 토큰 존재만 보지 말고 실제 유효성도 확인
+    final isValid = await _hasValidSession();
+    initialRoute = isValid ? '/main' : '/login';
   }
 
   runApp(

@@ -6,6 +6,7 @@ import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
 import 'add_camera_screen.dart';
+import '../providers/theme_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -27,8 +28,6 @@ class SettingsScreen extends StatelessWidget {
           ],
         ),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, 0, AppSpacing.lg, 100),
       ),
     );
   }
@@ -290,14 +289,7 @@ class SettingsScreen extends StatelessWidget {
               settings.isAlertOn,
               (val) => context.read<SettingsProvider>().toggleAlert(val),
             ),
-            _buildToggleTile(
-              context,
-              '야간 모드 (다크)',
-              '어두운 방에서 모니터링 시 눈 보호',
-              Icons.dark_mode,
-              themeProvider.isDarkMode,
-              (val) => context.read<ThemeProvider>().toggleTheme(val),
-            ),
+            _buildThemeTile(context, themeProvider),
           ],
         ),
       ),
@@ -367,7 +359,136 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+/// 라이트/다크/시스템 3-way 선택 타일.
+Widget _buildThemeTile(
+    BuildContext context, ThemeProvider themeProvider) {
+  final cs = Theme.of(context).colorScheme;
+  final pref = themeProvider.preference;
 
+  IconData currentIcon;
+  String currentLabel;
+  switch (pref) {
+    case AppThemePreference.system:
+      currentIcon = Icons.brightness_auto_outlined;
+      currentLabel = '기기 설정 따라감';
+      break;
+    case AppThemePreference.light:
+      currentIcon = Icons.light_mode_outlined;
+      currentLabel = '항상 밝게';
+      break;
+    case AppThemePreference.dark:
+      currentIcon = Icons.dark_mode_outlined;
+      currentLabel = '항상 어둡게';
+      break;
+  }
+
+  return Container(
+    margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+    decoration: BoxDecoration(
+      color: Theme.of(context).cardColor,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+    ),
+    child: Column(
+      children: [
+        ListTile(
+          title: const Text('테마',
+              style:
+                  TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          subtitle: Text(currentLabel,
+              style:
+                  TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          leading: CircleAvatar(
+            backgroundColor: AppColors.accent.withOpacity(0.1),
+            child: Icon(currentIcon, color: AppColors.accent, size: 20),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          child: Row(
+            children: [
+              _buildThemeOption(
+                context,
+                themeProvider,
+                AppThemePreference.system,
+                Icons.brightness_auto_outlined,
+                '시스템',
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _buildThemeOption(
+                context,
+                themeProvider,
+                AppThemePreference.light,
+                Icons.light_mode_outlined,
+                '밝게',
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _buildThemeOption(
+                context,
+                themeProvider,
+                AppThemePreference.dark,
+                Icons.dark_mode_outlined,
+                '어둡게',
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildThemeOption(
+  BuildContext context,
+  ThemeProvider themeProvider,
+  AppThemePreference target,
+  IconData icon,
+  String label,
+) {
+  final isSelected = themeProvider.preference == target;
+  final cs = Theme.of(context).colorScheme;
+
+  return Expanded(
+    child: GestureDetector(
+      onTap: () => themeProvider.setPreference(target),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.accent.withOpacity(0.1)
+              : cs.surfaceContainerLowest,
+          border: Border.all(
+            color: isSelected ? AppColors.accent : cs.outlineVariant,
+            width: isSelected ? 1.5 : 0.5,
+          ),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? AppColors.accent : cs.onSurfaceVariant,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    isSelected ? FontWeight.w700 : FontWeight.w500,
+                color:
+                    isSelected ? AppColors.accent : cs.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 class ProfileEditScreen extends StatefulWidget {
   const ProfileEditScreen({super.key});
 

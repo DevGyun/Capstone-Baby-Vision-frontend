@@ -91,7 +91,8 @@ class ZoneScreen extends StatefulWidget {
   State<ZoneScreen> createState() => _ZoneScreenState();
 }
 
-class _ZoneScreenState extends State<ZoneScreen> {
+class _ZoneScreenState extends State<ZoneScreen>
+    with WidgetsBindingObserver {
   int _selectedCameraIndex = 0;
   int? _currentLoadedCameraId;
   Size? _canvasSize;
@@ -113,11 +114,31 @@ class _ZoneScreenState extends State<ZoneScreen> {
     return false;
   }
 
-  @override
-  void dispose() {
-    _labelController.dispose();
-    super.dispose();
+@override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addObserver(this);
+}
+
+@override
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  _labelController.dispose();
+  super.dispose();
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  super.didChangeAppLifecycleState(state);
+  // 포그라운드로 돌아오면 현재 카메라의 zone을 다시 로드
+  if (state == AppLifecycleState.resumed && mounted) {
+    final cameras = context.read<CameraProvider>().cameras;
+    if (cameras.isNotEmpty && _currentLoadedCameraId != null) {
+      final safeIdx = _selectedCameraIndex.clamp(0, cameras.length - 1);
+      _loadZones(cameras[safeIdx].id);
+    }
   }
+}
 
   static const double _handleHitRadius = 24;
 

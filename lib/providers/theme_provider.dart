@@ -1,36 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
+/// 사용자가 명시적으로 설정 가능한 테마 모드.
+/// system이 기본값 — 기기 설정 따라감.
+enum AppThemePreference { system, light, dark }
 
-  ThemeMode get themeMode => _themeMode;
-  bool get isDarkMode => _themeMode == ThemeMode.dark;
+class ThemeProvider extends ChangeNotifier {
+  AppThemePreference _preference = AppThemePreference.system;
+
+  AppThemePreference get preference => _preference;
+
+  ThemeMode get themeMode {
+    switch (_preference) {
+      case AppThemePreference.system:
+        return ThemeMode.system;
+      case AppThemePreference.light:
+        return ThemeMode.light;
+      case AppThemePreference.dark:
+        return ThemeMode.dark;
+    }
+  }
+
+  /// 현재 적용된 테마가 다크인지 — 시스템 따라가기일 때도 정확하게 판단.
+  /// MediaQuery 정보가 필요하므로 BuildContext와 함께 호출.
+  bool isDarkMode(BuildContext context) {
+    switch (_preference) {
+      case AppThemePreference.system:
+        return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+      case AppThemePreference.light:
+        return false;
+      case AppThemePreference.dark:
+        return true;
+    }
+  }
 
   ThemeProvider() {
     _loadTheme();
   }
 
-  // 앱 시작 시 SharedPreferences에서 저장된 테마 불러오기
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
     final themeStr = prefs.getString('theme');
-    
-    if (themeStr == 'dark') {
-      _themeMode = ThemeMode.dark;
-    } else if (themeStr == 'light') {
-      _themeMode = ThemeMode.light;
-    } else {
-      _themeMode = ThemeMode.system;
+
+    switch (themeStr) {
+      case 'dark':
+        _preference = AppThemePreference.dark;
+        break;
+      case 'light':
+        _preference = AppThemePreference.light;
+        break;
+      case 'system':
+      default:
+        _preference = AppThemePreference.system;
     }
     notifyListeners();
   }
 
-  // 사용자가 테마를 변경할 때 호출되는 함수
-  Future<void> toggleTheme(bool isDark) async {
-    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+  Future<void> setPreference(AppThemePreference pref) async {
+    _preference = pref;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme', isDark ? 'dark' : 'light');
-    notifyListeners(); // 화면 전체에 테마 변경 알림
+    final value = switch (pref) {
+      AppThemePreference.system => 'system',
+      AppThemePreference.light => 'light',
+      AppThemePreference.dark => 'dark',
+    };
+    await prefs.setString('theme', value);
+    notifyListeners();
+  }
+
+  /// 기존 코드 호환용 — 다크 토글 (시스템 모드 무시).
+  /// 새로 만드는 화면에선 setPreference를 직접 쓰는 게 좋아요.
+  Future<void> toggleTheme(bool isDark) async {
+    await setPreference(
+        isDark ? AppThemePreference.dark : AppThemePreference.light);
   }
 }

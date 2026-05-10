@@ -180,18 +180,21 @@ class AppTheme {
       ),
 
       snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: colorScheme.surfaceContainerHigh,
-        contentTextStyle: GoogleFonts.notoSansKr(
-          fontSize: 14,
-          color: colorScheme.onSurface,
-          fontWeight: FontWeight.w500,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        elevation: 2,
-      ),
+  behavior: SnackBarBehavior.floating,
+  backgroundColor: colorScheme.surfaceContainerHigh,
+  contentTextStyle: GoogleFonts.notoSansKr(
+    fontSize: 14,
+    color: colorScheme.onSurface,
+    fontWeight: FontWeight.w500,
+  ),
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppRadius.md),
+  ),
+  elevation: 2,
+  // 플로팅 네비바(높이 70 + 하단 24 마진)를 피해서 표시
+  insetPadding: const EdgeInsets.fromLTRB(
+      AppSpacing.lg, 0, AppSpacing.lg, 110),
+),
 
       dividerTheme: DividerThemeData(
         color: colorScheme.outlineVariant,

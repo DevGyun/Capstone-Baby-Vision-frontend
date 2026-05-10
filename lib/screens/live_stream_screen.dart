@@ -55,8 +55,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
         ),
         backgroundColor: AppColors.accent,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, 0, AppSpacing.lg, 100),
         duration: const Duration(seconds: 2),
       ),
     );

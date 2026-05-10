@@ -34,37 +34,74 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   int _selectedCameraIndex = 0;
 
   /// 자동 폴링 (30초마다 알림 + 카메라 연결 상태).
   Timer? _pollingTimer;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<CameraProvider>().fetchCameras();
-      context.read<LogProvider>().fetchAlerts();
-    });
+  // 라이프사이클 감지 등록
+  WidgetsBinding.instance.addObserver(this);
 
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted) return;
-      context.read<LogProvider>().fetchAlerts();
-      context.read<CameraProvider>().fetchCameras();
-    });
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!mounted) return;
+    context.read<CameraProvider>().fetchCameras();
+    context.read<LogProvider>().fetchAlerts();
+  });
+
+  _startPolling();
+}
+
+@override
+void dispose() {
+  WidgetsBinding.instance.removeObserver(this);
+  _stopPolling();
+  super.dispose();
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  super.didChangeAppLifecycleState(state);
+
+  switch (state) {
+    case AppLifecycleState.resumed:
+      // 포그라운드 복귀 — 한 번 즉시 갱신 + 폴링 재개
+      if (mounted) {
+        context.read<CameraProvider>().fetchCameras();
+        context.read<LogProvider>().fetchAlerts();
+      }
+      _startPolling();
+      break;
+    case AppLifecycleState.paused:
+    case AppLifecycleState.inactive:
+    case AppLifecycleState.detached:
+    case AppLifecycleState.hidden:
+      // 백그라운드 / 화면 꺼짐 — 폴링 중단해서 데이터 절약
+      _stopPolling();
+      break;
   }
+}
 
-  @override
-  void dispose() {
-    _pollingTimer?.cancel();
-    super.dispose();
-  }
+void _startPolling() {
+  _pollingTimer?.cancel();
+  _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    if (!mounted) return;
+    context.read<LogProvider>().fetchAlerts();
+    context.read<CameraProvider>().fetchCameras();
+  });
+}
 
-  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+void _stopPolling() {
+  _pollingTimer?.cancel();
+  _pollingTimer = null;
+}
+
+void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   /// 페어링 직후 환영 SnackBar — Provider의 justPairedCameraName 감지.
   void _maybeShowJustPairedSnack() {
@@ -98,8 +135,6 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(
-            AppSpacing.lg, 0, AppSpacing.lg, 100), // 플로팅 네비 위로 띄우기
         duration: const Duration(seconds: 3),
       ),
     );
