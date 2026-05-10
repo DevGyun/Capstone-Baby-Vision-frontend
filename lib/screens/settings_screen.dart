@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/settings_provider.dart';
@@ -11,24 +10,29 @@ import 'add_camera_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  void _showSnack(BuildContext context, String message, {bool isError = false}) {
+  void _showSnack(BuildContext context, String message,
+      {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(isError ? Icons.error_outline : Icons.check_circle_outline, color: isError ? AppColors.danger : AppColors.success, size: 20),
+            Icon(
+                isError
+                    ? Icons.error_outline
+                    : Icons.check_circle_outline,
+                color: isError ? AppColors.danger : AppColors.success,
+                size: 20),
             const SizedBox(width: AppSpacing.sm),
             Expanded(child: Text(message)),
           ],
         ),
         behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, 0, AppSpacing.lg, 100),
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   회원 탈퇴 다이얼로그
-  // ─────────────────────────────────────────────────────────────
   void _showDeleteAccountDialog(BuildContext context) {
     final passwordController = TextEditingController();
 
@@ -118,6 +122,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // watch로 SettingsProvider를 구독 — 이름 바뀌면 즉시 리빌드
     final settings = context.watch<SettingsProvider>();
     final themeProvider = context.watch<ThemeProvider>();
 
@@ -130,7 +135,8 @@ class SettingsScreen extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('개인정보를 수정하려면 비밀번호를 다시 입력해주세요.', style: TextStyle(fontSize: 14)),
+              const Text('개인정보를 수정하려면 비밀번호를 다시 입력해주세요.',
+                  style: TextStyle(fontSize: 14)),
               const SizedBox(height: AppSpacing.md),
               TextField(
                 controller: passwordController,
@@ -155,7 +161,8 @@ class SettingsScreen extends StatelessWidget {
 
                 final isSuccess = await settings.verifyPassword(
                     password,
-                    (errorMsg) => _showSnack(context, errorMsg, isError: true));
+                    (errorMsg) =>
+                        _showSnack(context, errorMsg, isError: true));
 
                 if (isSuccess && context.mounted) {
                   Navigator.pop(dialogContext);
@@ -165,7 +172,8 @@ class SettingsScreen extends StatelessWidget {
                           builder: (context) => const ProfileEditScreen()));
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
               child: settings.isLoading
                   ? const SizedBox(
                       width: 16,
@@ -186,7 +194,9 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Icon(Icons.home, color: AppColors.accent),
             SizedBox(width: AppSpacing.sm),
-            Text('Eye Catch', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.bold)),
+            Text('Eye Catch',
+                style: TextStyle(
+                    color: AppColors.accent, fontWeight: FontWeight.bold)),
           ],
         ),
         backgroundColor: Colors.transparent,
@@ -197,7 +207,7 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 프로필 섹션
+            // 프로필 섹션 — 이니셜 아바타로 교체
             Container(
               padding: const EdgeInsets.all(AppSpacing.lg),
               decoration: BoxDecoration(
@@ -207,10 +217,15 @@ class SettingsScreen extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  const CircleAvatar(radius: 50, backgroundImage: NetworkImage('https://images.unsplash.com/photo-1596131398991-b94f928d85a1?auto=format&fit=crop&q=80')),
+                  InitialAvatar(name: settings.profileName, radius: 50),
                   const SizedBox(height: AppSpacing.md),
-                  Text('${settings.profileName} 보호자님', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(settings.profileEmail, style: TextStyle(color: cs.onSurfaceVariant)),
+                  Text('${settings.profileName} 보호자님',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold)),
+                  Text(settings.profileEmail,
+                      style: TextStyle(color: cs.onSurfaceVariant)),
                   const SizedBox(height: AppSpacing.xl),
                   SoftButton(
                     label: '로그아웃',
@@ -218,18 +233,23 @@ class SettingsScreen extends StatelessWidget {
                     onPressed: () {
                       settings.logout(() {
                         _showSnack(context, '안전하게 로그아웃 되었습니다.');
-                        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                        Navigator.pushNamedAndRemoveUntil(
+                            context, '/login', (route) => false);
                       });
                     },
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: AppSpacing.xl),
-            Text('계정 관리', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('계정 관리',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
-            _buildListTile(context, '보호자 정보 수정', '비밀번호 및 이름 변경', Icons.person, onTap: showPasswordCheckDialog),
+            _buildListTile(context, '보호자 정보 수정', '비밀번호 및 이름 변경', Icons.person,
+                onTap: showPasswordCheckDialog),
             _buildListTile(
               context,
               '회원 탈퇴',
@@ -238,9 +258,12 @@ class SettingsScreen extends StatelessWidget {
               isDanger: true,
               onTap: () => _showDeleteAccountDialog(context),
             ),
-
             const SizedBox(height: AppSpacing.lg),
-            Text('기기 연동', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('기기 연동',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
             _buildListTile(
               context,
@@ -252,17 +275,28 @@ class SettingsScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => const AddCameraScreen()),
               ),
             ),
-
             const SizedBox(height: AppSpacing.lg),
-            Text('환경 설정', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text('환경 설정',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
             _buildToggleTile(
-              context, '아이 활동 알림', '위험 구역 접근 및 울음소리 감지 시 즉시 알림', Icons.notifications_active,
-              settings.isAlertOn, (val) => context.read<SettingsProvider>().toggleAlert(val),
+              context,
+              '아이 활동 알림',
+              '위험 구역 접근 및 울음소리 감지 시 즉시 알림',
+              Icons.notifications_active,
+              settings.isAlertOn,
+              (val) => context.read<SettingsProvider>().toggleAlert(val),
             ),
             _buildToggleTile(
-              context, '야간 모드 (다크)', '어두운 방에서 모니터링 시 눈 보호', Icons.dark_mode,
-              themeProvider.isDarkMode, (val) => context.read<ThemeProvider>().toggleTheme(val),
+              context,
+              '야간 모드 (다크)',
+              '어두운 방에서 모니터링 시 눈 보호',
+              Icons.dark_mode,
+              themeProvider.isDarkMode,
+              (val) => context.read<ThemeProvider>().toggleTheme(val),
             ),
           ],
         ),
@@ -304,17 +338,27 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildToggleTile(BuildContext context, String title, String subtitle, IconData icon, bool value, ValueChanged<bool> onChanged) {
+  Widget _buildToggleTile(BuildContext context, String title, String subtitle,
+      IconData icon, bool value, ValueChanged<bool> onChanged) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(AppRadius.lg)),
+      decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(AppRadius.lg)),
       child: SwitchListTile(
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        subtitle: Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+        title: Text(title,
+            style:
+                const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        subtitle: Text(subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
         secondary: CircleAvatar(
-          backgroundColor: value ? AppColors.accent.withOpacity(0.1) : cs.surfaceContainerHighest,
-          child: Icon(icon, color: value ? AppColors.accent : cs.onSurfaceVariant, size: 20),
+          backgroundColor: value
+              ? AppColors.accent.withOpacity(0.1)
+              : cs.surfaceContainerHighest,
+          child: Icon(icon,
+              color: value ? AppColors.accent : cs.onSurfaceVariant,
+              size: 20),
         ),
         value: value,
         onChanged: onChanged,
@@ -338,7 +382,8 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: context.read<SettingsProvider>().profileName);
+    _nameController = TextEditingController(
+        text: context.read<SettingsProvider>().profileName);
   }
 
   @override
@@ -356,24 +401,56 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       final isSuccess = await settings.updateProfile(
         _nameController.text.trim(),
         _passwordController.text.trim(),
-        (errorMsg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg))),
+        (errorMsg) => ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(errorMsg))),
       );
 
       if (isSuccess && context.mounted) {
+        // ✨ 핵심: 저장 후 SharedPreferences 다시 읽어서 일관성 보장
+        await settings.loadSettings();
+        if (!mounted) return;
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('정보가 성공적으로 수정되었습니다.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('정보가 성공적으로 수정되었습니다.')),
+        );
       }
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('보호자 정보 수정', style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.transparent, elevation: 0),
+      appBar: AppBar(
+          title: const Text('보호자 정보 수정',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.transparent,
+          elevation: 0),
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: '이름 변경', border: OutlineInputBorder())),
+            // 미리보기 — 입력하는 동안 아바타 색이 살아남
+            ListenableBuilder(
+              listenable: _nameController,
+              builder: (_, __) => Column(
+                children: [
+                  InitialAvatar(
+                    name: _nameController.text.isEmpty
+                        ? settings.profileName
+                        : _nameController.text,
+                    radius: 40,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                ],
+              ),
+            ),
+            TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                    labelText: '이름 변경', border: OutlineInputBorder())),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: _passwordController, decoration: const InputDecoration(labelText: '새 비밀번호', border: OutlineInputBorder()), obscureText: true),
+            TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(
+                    labelText: '새 비밀번호', border: OutlineInputBorder()),
+                obscureText: true),
             const SizedBox(height: AppSpacing.xl),
             SoftButton(
               label: '저장하기',

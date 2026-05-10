@@ -59,29 +59,29 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
   }
 
   Future<void> _onSubmit() async {
-    FocusScope.of(context).unfocus();
-    final error = _validate();
-    if (error != null) {
-      _showSnack(error, isError: true);
-      return;
-    }
-
-    final provider = context.read<CameraProvider>();
-    final success = await provider.pairCamera(
-      pairingCode: _codeController.text.trim(),
-      name: _nameController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      _showSnack('"${_nameController.text.trim()}" 카메라가 연결되었어요',
-          isError: false);
-      Navigator.pop(context);
-    } else {
-      _showSnack(provider.lastErrorMessage ?? '연결에 실패했어요', isError: true);
-    }
+  FocusScope.of(context).unfocus();
+  final error = _validate();
+  if (error != null) {
+    _showSnack(error, isError: true);
+    return;
   }
+
+  final provider = context.read<CameraProvider>();
+  final success = await provider.pairCamera(
+    pairingCode: _codeController.text.trim(),
+    name: _nameController.text.trim(),
+  );
+
+  if (!mounted) return;
+
+  if (success) {
+    // SnackBar는 메인 화면이 justPairedCameraName을 보고 띄움.
+    // 여기선 그냥 닫기만.
+    Navigator.pop(context);
+  } else {
+    _showSnack(provider.lastErrorMessage ?? '연결에 실패했어요', isError: true);
+  }
+}
 
   void _showSnack(String message, {required bool isError}) {
     final cs = Theme.of(context).colorScheme;

@@ -32,8 +32,6 @@ class CameraModel {
     );
   }
 
-  /// 일부 필드만 바꿔서 새 인스턴스 만들기.
-  /// 토글 같은 부분 업데이트에 사용.
   CameraModel copyWith({
     String? name,
     String? hlsUrl,
@@ -57,11 +55,20 @@ class CameraProvider with ChangeNotifier {
   List<CameraModel> _cameras = [];
   String? _lastErrorMessage;
 
+  /// 방금 등록된 카메라 이름 — 메인 화면이 이걸 감지하고 환영 SnackBar 표시.
+  /// SnackBar 표시 후엔 메인 화면이 [consumeJustPairedCameraName]으로 비움.
+  String? _justPairedCameraName;
+
   bool get isLoading => _isLoading;
   List<CameraModel> get cameras => _cameras;
   String? get lastErrorMessage => _lastErrorMessage;
+  String? get justPairedCameraName => _justPairedCameraName;
 
-  /// FastAPI 에러 응답 `{"detail": "..."}` 또는 `{"detail": [{"msg": "..."}]}` 파싱.
+  /// 메인 화면이 환영 메시지를 표시한 후 호출 — 같은 이벤트가 두 번 안 뜨도록.
+  void consumeJustPairedCameraName() {
+    _justPairedCameraName = null;
+  }
+
   String? _extractDetail(http.Response response) {
     if (response.body.isEmpty) return null;
     try {
@@ -96,6 +103,8 @@ class CameraProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        // 메인 화면에서 환영 메시지 띄우도록 마킹
+        _justPairedCameraName = name;
         await fetchCameras();
         return true;
       }
@@ -110,7 +119,8 @@ class CameraProvider with ChangeNotifier {
           _lastErrorMessage = '로그인이 필요해요. 다시 로그인 후 시도해 주세요.';
           break;
         case 404:
-          _lastErrorMessage = detail ?? '잘못되거나 만료된 페어링 코드예요. 카메라에서 새 코드를 확인해 주세요.';
+          _lastErrorMessage =
+              detail ?? '잘못되거나 만료된 페어링 코드예요. 카메라에서 새 코드를 확인해 주세요.';
           break;
         case 422:
           _lastErrorMessage = detail ?? '코드는 6자리 숫자여야 해요.';
@@ -177,9 +187,6 @@ class CameraProvider with ChangeNotifier {
   }
 
   // ── 카메라 모니터링 켜기/끄기 ──
-  /// PATCH /cameras/{id} 로 is_active 토글.
-  /// is_active=false 면 Vision 서비스가 분석 대상에서 제외함.
-  /// 낙관적 업데이트: UI를 먼저 바꾸고 서버 실패 시 롤백.
   Future<bool> setCameraActive(int cameraId, bool isActive) async {
     final idx = _cameras.indexWhere((c) => c.id == cameraId);
     if (idx == -1) return false;
@@ -196,20 +203,16 @@ class CameraProvider with ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        // 서버가 돌려준 최신 상태로 다시 동기화
         try {
           final data = jsonDecode(response.body);
           if (data is Map<String, dynamic>) {
             _cameras[idx] = CameraModel.fromJson(data);
             notifyListeners();
           }
-        } catch (_) {
-          // 파싱 실패해도 낙관적 업데이트 결과는 유지
-        }
+        } catch (_) {}
         return true;
       }
 
-      // 실패 → 롤백
       _cameras[idx] = original;
       notifyListeners();
       print('카메라 활성 토글 실패: ${response.statusCode} ${response.body}');

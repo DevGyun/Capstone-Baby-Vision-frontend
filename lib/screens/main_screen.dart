@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 // 3. Providers
 import '../providers/camera_provider.dart';
 import '../providers/log_provider.dart';
+import '../providers/settings_provider.dart';
 
 // 4. Services
 import '../services/notification_service.dart';
@@ -24,6 +25,7 @@ import 'zone_screen.dart';
 // 6. Theme & widgets
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
+import '../widgets/common/initial_avatar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -63,6 +65,45 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+
+  /// 페어링 직후 환영 SnackBar — Provider의 justPairedCameraName 감지.
+  void _maybeShowJustPairedSnack() {
+    final cameraProvider = context.read<CameraProvider>();
+    final justPaired = cameraProvider.justPairedCameraName;
+    if (justPaired == null) return;
+
+    cameraProvider.consumeJustPairedCameraName();
+
+    // 새로 등록한 카메라를 자동으로 선택해서 보여주기
+    final newIdx =
+        cameraProvider.cameras.indexWhere((c) => c.name == justPaired);
+    if (newIdx != -1 && mounted) {
+      setState(() => _selectedCameraIndex = newIdx);
+    }
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline,
+                color: AppColors.success, size: 20),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '"$justPaired" 카메라가 연결되었어요',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, 0, AppSpacing.lg, 100), // 플로팅 네비 위로 띄우기
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   // ─────────────────────────────────────────────────────────────
   //   카메라 삭제 확인 다이얼로그
@@ -173,6 +214,14 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    // 페어링 직후 한 번만 SnackBar 표시
+    final justPaired = context.watch<CameraProvider>().justPairedCameraName;
+    if (justPaired != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _maybeShowJustPairedSnack();
+      });
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
@@ -191,13 +240,11 @@ class _MainScreenState extends State<MainScreen> {
                     const SettingsScreen(),
                   ],
                 ),
-                // 테스트 알림 FAB (플로팅 네비 위에 위치)
                 Positioned(
                   bottom: 110,
                   right: AppSpacing.lg,
                   child: _buildTestNotificationFab(),
                 ),
-                // 플로팅 네비
                 Positioned(
                   bottom: AppSpacing.lg,
                   left: AppSpacing.lg,
@@ -212,13 +259,9 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   모니터링 화면 본문
-  // ─────────────────────────────────────────────────────────────
   Widget _buildMonitoringView() {
     final cameras = context.watch<CameraProvider>().cameras;
 
-    // ✅ 카메라가 0대일 경우, 대시보드 전체를 숨기고 기획안 형태의 꽉 찬 빈 화면 노출
     if (cameras.isEmpty) {
       return _buildNoCameraDashboard();
     }
@@ -258,16 +301,14 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   ✅ 추가: 카메라가 없을 때 보여주는 전체 빈 화면 (HTML 기획안 반영)
-  // ─────────────────────────────────────────────────────────────
   Widget _buildNoCameraDashboard() {
     final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 120),
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 120),
         child: Column(
           children: [
             _buildTopHeader(),
@@ -275,7 +316,6 @@ class _MainScreenState extends State<MainScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 아이콘 및 장식용 3D 빛 번짐(Blur) 효과
                   Stack(
                     clipBehavior: Clip.none,
                     alignment: Alignment.center,
@@ -301,7 +341,6 @@ class _MainScreenState extends State<MainScreen> {
                           color: cs.outlineVariant,
                         ),
                       ),
-                      // 상단 붉은색 장식
                       Positioned(
                         top: -8,
                         right: -8,
@@ -312,12 +351,14 @@ class _MainScreenState extends State<MainScreen> {
                             color: AppColors.dangerSoft(context),
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(color: AppColors.dangerSoft(context), blurRadius: 10, spreadRadius: 5)
+                              BoxShadow(
+                                  color: AppColors.dangerSoft(context),
+                                  blurRadius: 10,
+                                  spreadRadius: 5)
                             ],
                           ),
                         ),
                       ),
-                      // 하단 푸른색 장식
                       Positioned(
                         bottom: 16,
                         left: -16,
@@ -328,7 +369,10 @@ class _MainScreenState extends State<MainScreen> {
                             color: AppColors.accentSoft(context),
                             shape: BoxShape.circle,
                             boxShadow: [
-                              BoxShadow(color: AppColors.accentSoft(context), blurRadius: 8, spreadRadius: 4)
+                              BoxShadow(
+                                  color: AppColors.accentSoft(context),
+                                  blurRadius: 8,
+                                  spreadRadius: 4)
                             ],
                           ),
                         ),
@@ -354,8 +398,6 @@ class _MainScreenState extends State<MainScreen> {
                 ],
               ),
             ),
-            
-            // 하단 액션 영역 (가이드 보기 + 카메라 추가)
             Column(
               children: [
                 TextButton.icon(
@@ -367,13 +409,15 @@ class _MainScreenState extends State<MainScreen> {
                   icon: Icon(Icons.help_outline, size: 18, color: cs.outline),
                   label: Text(
                     '가이드 보기',
-                    style: TextStyle(color: cs.outline, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        color: cs.outline, fontWeight: FontWeight.w600),
                   ),
                   style: TextButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -393,9 +437,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   상단 헤더 (로고 + 알림 + 아바타)
-  // ─────────────────────────────────────────────────────────────
   Widget _buildTopHeader() {
     final cs = Theme.of(context).colorScheme;
     final unreadCount =
@@ -404,7 +445,6 @@ class _MainScreenState extends State<MainScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // 로고
         Row(
           children: [
             Container(
@@ -431,10 +471,8 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ],
         ),
-        // 알림 + 아바타
         Row(
           children: [
-            // 알림 벨 + 카운트
             GestureDetector(
               onTap: () => setState(() => _selectedIndex = 2),
               behavior: HitTestBehavior.opaque,
@@ -456,8 +494,8 @@ class _MainScreenState extends State<MainScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 5, vertical: 1),
-                        constraints:
-                            const BoxConstraints(minWidth: 16, minHeight: 16),
+                        constraints: const BoxConstraints(
+                            minWidth: 16, minHeight: 16),
                         decoration: BoxDecoration(
                           color: AppColors.accent,
                           borderRadius: BorderRadius.circular(8),
@@ -480,26 +518,18 @@ class _MainScreenState extends State<MainScreen> {
             ),
             const SizedBox(width: AppSpacing.md),
             GestureDetector(
-              onTap: () => setState(() => _selectedIndex = 3),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: cs.surfaceContainerHigh,
-                child: Icon(
-                  Icons.person_outline,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-            ),
+  onTap: () => setState(() => _selectedIndex = 3),
+  child: Selector<SettingsProvider, String>(
+    selector: (_, s) => s.profileName,
+    builder: (_, name, __) => InitialAvatar(name: name, radius: 16),
+  ),
+),
           ],
         ),
       ],
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   "Live System / 실시간 모니터링" 섹션 + 메인 비디오
-  // ─────────────────────────────────────────────────────────────
   Widget _buildLiveSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,9 +573,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   메인 비디오 카드
-  // ─────────────────────────────────────────────────────────────
   Widget _buildMainVideoCard() {
     final cs = Theme.of(context).colorScheme;
     final cameras = context.watch<CameraProvider>().cameras;
@@ -577,10 +604,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 영상 플레이스홀더 (실제 영상은 LiveStreamScreen에서)
                 Container(color: Colors.black),
-
-                // 중앙 재생 버튼
                 Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -612,19 +636,21 @@ class _MainScreenState extends State<MainScreen> {
                     ],
                   ),
                 ),
-
-                // 좌상단: 위험구역 감지 켜짐
-                const Positioned(
+                Positioned(
                   top: 12,
                   left: 12,
-                  child: SoftChip(
-                    label: '위험구역 감지 켜짐',
-                    tone: SoftChipTone.warning,
-                    icon: Icons.warning_amber_rounded,
-                  ),
+                  child: cam.isActive
+                      ? const SoftChip(
+                          label: '위험구역 감지 켜짐',
+                          tone: SoftChipTone.warning,
+                          icon: Icons.warning_amber_rounded,
+                        )
+                      : const SoftChip(
+                          label: '모니터링 일시중지',
+                          tone: SoftChipTone.neutral,
+                          icon: Icons.pause_circle_outline,
+                        ),
                 ),
-
-                // 우상단: 연결 상태
                 Positioned(
                   top: 12,
                   right: 12,
@@ -657,8 +683,6 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ),
                 ),
-
-                // 하단: 카메라 정보 + 삭제
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -690,6 +714,36 @@ class _MainScreenState extends State<MainScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        // 모니터링 토글
+                        InkWell(
+                          onTap: () async {
+                            final newState = !cam.isActive;
+                            final ok = await context
+                                .read<CameraProvider>()
+                                .setCameraActive(cam.id, newState);
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(ok
+                                    ? (newState ? '모니터링이 켜졌어요' : '모니터링이 꺼졌어요')
+                                    : '변경에 실패했어요. 다시 시도해 주세요'),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Icon(
+                              cam.isActive
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                              color: cam.isActive
+                                  ? Colors.white.withOpacity(0.85)
+                                  : AppColors.warning,
+                              size: 18,
+                            ),
+                          ),
+                        ),
                         InkWell(
                           onTap: () => _showDeleteConfirmation(
                               context, cam.id, cam.name),
@@ -715,9 +769,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   카메라 썸네일 행 (가로 스크롤)
-  // ─────────────────────────────────────────────────────────────
   Widget _buildThumbnailsRow() {
     final cameras = context.watch<CameraProvider>().cameras;
 
@@ -851,9 +902,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   통계 카드 2개
-  // ─────────────────────────────────────────────────────────────
   Widget _buildStatsCards() {
     final cameras = context.watch<CameraProvider>().cameras;
     final logs = context.watch<LogProvider>().logs;
@@ -883,18 +931,14 @@ class _MainScreenState extends State<MainScreen> {
             value: '$unread',
             unit: '건',
             accentColor: AppColors.accent,
-            progress: totalLogs == 0
-                ? 0
-                : (unread / totalLogs).clamp(0.0, 1.0),
+            progress:
+                totalLogs == 0 ? 0 : (unread / totalLogs).clamp(0.0, 1.0),
           ),
         ),
       ],
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   최근 알림 패널
-  // ─────────────────────────────────────────────────────────────
   Widget _buildRecentLogsPanel() {
     final cs = Theme.of(context).colorScheme;
     final logs = context.watch<LogProvider>().logs;
@@ -909,7 +953,6 @@ class _MainScreenState extends State<MainScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더
           Padding(
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.md, AppSpacing.md, 8, AppSpacing.sm + 2),
@@ -951,8 +994,6 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
           ),
-
-          // 본문
           if (displayLogs.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -978,7 +1019,6 @@ class _MainScreenState extends State<MainScreen> {
             )
           else
             ...displayLogs.map((log) => _buildLogItem(log)),
-
           const SizedBox(height: 4),
         ],
       ),
@@ -997,16 +1037,15 @@ class _MainScreenState extends State<MainScreen> {
           MaterialPageRoute(builder: (_) => IncidentDetailsScreen(log: log)),
         ),
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: 8),
           child: Row(
             children: [
               Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color:
-                      log.iconColor.withOpacity(isDark ? 0.18 : 0.12),
+                  color: log.iconColor.withOpacity(isDark ? 0.18 : 0.12),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 alignment: Alignment.center,
@@ -1033,9 +1072,10 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         Text(
                           log.time,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: cs.onSurfaceVariant,
-                              ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -1071,9 +1111,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   플로팅 네비게이션 바
-  // ─────────────────────────────────────────────────────────────
   Widget _buildFloatingNavBar() {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1130,8 +1167,9 @@ class _MainScreenState extends State<MainScreen> {
           vertical: AppSpacing.sm,
         ),
         decoration: BoxDecoration(
-          color:
-              isSelected ? AppColors.accentSoft(context) : Colors.transparent,
+          color: isSelected
+              ? AppColors.accentSoft(context)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: Column(
@@ -1158,9 +1196,6 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  //   테스트 알림 FAB
-  // ─────────────────────────────────────────────────────────────
   Widget _buildTestNotificationFab() {
     return Material(
       color: Colors.transparent,
@@ -1195,11 +1230,6 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-// ════════════════════════════════════════════════════════════════
-//   서브 위젯
-// ════════════════════════════════════════════════════════════════
-
-/// 통계 카드 (간소화된 AI 카드 대체).
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String label;

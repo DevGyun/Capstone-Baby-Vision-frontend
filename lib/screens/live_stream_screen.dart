@@ -22,7 +22,6 @@ class LiveStreamScreen extends StatefulWidget {
 class _LiveStreamScreenState extends State<LiveStreamScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  bool _isRecording = false;
 
   /// 스트림 실제 연결 상태.
   bool _isStreamConnected = false;
@@ -42,12 +41,23 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     super.dispose();
   }
 
-  void _showSnack(String message, {bool isError = false}) {
+  /// 미구현 기능 안내 — 거짓말하지 않고 정직하게.
+  void _showComingSoon(String featureName) {
+    ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? AppColors.danger : AppColors.success,
+        content: Row(
+          children: [
+            const Icon(Icons.construction, color: Colors.white, size: 18),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: Text('$featureName 기능은 준비 중이에요')),
+          ],
+        ),
+        backgroundColor: AppColors.accent,
         behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, 0, AppSpacing.lg, 100),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -72,9 +82,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                   }
                 },
                 onRetry: () {
-                  if (mounted) {
-                    setState(() => _retryCount++);
-                  }
+                  if (mounted) setState(() => _retryCount++);
                 },
               ),
             ),
@@ -96,32 +104,19 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                     child: Row(
                       children: [
                         IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new,
-                                color: Colors.white, size: 20),
-                            onPressed: () => Navigator.pop(context)),
+                          icon: const Icon(Icons.arrow_back_ios_new,
+                              color: Colors.white, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
                         Expanded(
-                            child: Text(widget.cameraName,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16))),
-                        if (_isRecording)
-                          FadeTransition(
-                            opacity: _animationController,
-                            child: const Row(
-                              children: [
-                                Icon(Icons.fiber_manual_record,
-                                    color: AppColors.danger, size: 14),
-                                SizedBox(width: 4),
-                                Text('REC',
-                                    style: TextStyle(
-                                        color: AppColors.danger,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12)),
-                              ],
-                            ),
+                          child: Text(
+                            widget.cameraName,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16),
                           ),
-                        const SizedBox(width: AppSpacing.md),
+                        ),
                         // LIVE 인디케이터 — 연결 상태에 따라 색/문구 다르게
                         Row(
                           children: [
@@ -146,6 +141,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                                 fontSize: 12,
                               ),
                             ),
+                            const SizedBox(width: AppSpacing.sm),
                           ],
                         ),
                       ],
@@ -155,7 +151,7 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
               ),
             ),
 
-            // 3. 연결 중 안내 배너 (스트림 미연결 시만 노출)
+            // 3. 연결 중 안내 배너
             if (!_isStreamConnected)
               Positioned(
                 top: 70,
@@ -181,25 +177,15 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        _buildActionBtn(
-                            icon: Icons.camera_alt_outlined,
-                            label: '캡처',
-                            color: Colors.white,
-                            enabled: _isStreamConnected,
-                            onTap: () => _showSnack('화면이 갤러리에 저장되었습니다.')),
-                        _buildActionBtn(
-                          icon: _isRecording
-                              ? Icons.stop_circle
-                              : Icons.fiber_manual_record,
-                          label: _isRecording ? '녹화 중지' : '영상 녹화',
-                          color: _isRecording ? AppColors.danger : Colors.white,
-                          enabled: _isStreamConnected,
-                          onTap: () {
-                            setState(() => _isRecording = !_isRecording);
-                            _showSnack(_isRecording
-                                ? '녹화를 시작합니다.'
-                                : '녹화가 완료되었습니다.');
-                          },
+                        _buildComingSoonBtn(
+                          icon: Icons.camera_alt_outlined,
+                          label: '캡처',
+                          onTap: () => _showComingSoon('캡처'),
+                        ),
+                        _buildComingSoonBtn(
+                          icon: Icons.fiber_manual_record,
+                          label: '녹화',
+                          onTap: () => _showComingSoon('녹화'),
                         ),
                       ],
                     ),
@@ -214,7 +200,6 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
   }
 
   /// 스트림 연결 안내 배너.
-  /// 페어링 직후엔 MediaMTX에 스트림이 올라오기까지 시간이 걸려요.
   Widget _buildConnectingBanner() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -275,15 +260,15 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     );
   }
 
-  Widget _buildActionBtn({
+  /// 준비 중 표시가 명확한 버튼.
+  /// 시각적으로 비활성 상태처럼 보이지만 탭하면 안내가 떠요.
+  Widget _buildComingSoonBtn({
     required IconData icon,
     required String label,
-    required Color color,
     required VoidCallback onTap,
-    bool enabled = true,
   }) {
     return InkWell(
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -291,12 +276,39 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: enabled ? color : color.withOpacity(0.4), size: 28),
-            const SizedBox(height: 4),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: Colors.white.withOpacity(0.5), size: 28),
+                // 우측 상단에 "soon" 점 표시
+                Positioned(
+                  top: -2,
+                  right: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'soon',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 7,
+                        fontWeight: FontWeight.w700,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                color: enabled ? color : color.withOpacity(0.4),
+                color: Colors.white.withOpacity(0.5),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
