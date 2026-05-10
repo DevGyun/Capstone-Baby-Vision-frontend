@@ -33,10 +33,16 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 /// 모두 실패하면 토큰 정리하고 false 반환.
 Future<bool> _hasValidSession() async {
   final prefs = await SharedPreferences.getInstance();
+
+  // 사용자가 자동 로그인을 껐다면 무조건 로그인 화면으로
+  final autoLoginEnabled = prefs.getBool('autoLoginEnabled') ?? true;
+  if (!autoLoginEnabled) return false;
+
   final token = prefs.getString('eyeCatchToken');
   if (token == null || token.isEmpty) return false;
 
-  try {
+
+ try {
     final response = await http.get(
       Uri.parse('${AppConfig.baseUrl}/users/me'),
       headers: {
@@ -46,20 +52,16 @@ Future<bool> _hasValidSession() async {
     ).timeout(const Duration(seconds: 5));
 
     if (response.statusCode == 200) {
-      // 유저 정보도 같이 갱신해두면 메인 진입 시 빠름
       await prefs.setString('eyeCatchUser', response.body);
       return true;
     }
 
     if (response.statusCode == 401) {
-      // access 만료 → refresh 시도
       return await _tryRefresh();
     }
 
-    // 그 외 에러는 일단 토큰은 살려두고 메인으로 (네트워크 일시 장애 가능)
     return true;
   } catch (e) {
-    // 타임아웃/네트워크 에러는 토큰 살려둠 — 사용자가 오프라인일 수 있음
     print('세션 검증 중 네트워크 에러: $e');
     return true;
   }
@@ -133,6 +135,8 @@ void main() async {
       child: EyeCatchApp(initialRoute: initialRoute),
     ),
   );
+  // 앱 시작 후 첫 프레임 그려진 다음, 종료 상태 알림 탭이었다면 라우팅 보정
+NotificationService().handleLaunchPayload();
 }
 
 class EyeCatchApp extends StatelessWidget {

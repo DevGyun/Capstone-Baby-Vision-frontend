@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -18,6 +19,32 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _autoLogin = true; // 기본 켜짐
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutoLoginPref();
+    _loadSavedEmail();
+  }
+
+  /// 사용자가 이전에 자동 로그인을 끄셨다면 그 설정 유지
+  Future<void> _loadAutoLoginPref() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getBool('autoLoginEnabled');
+    if (saved != null && mounted) {
+      setState(() => _autoLogin = saved);
+    }
+  }
+
+  /// 마지막으로 로그인한 이메일은 미리 채워둠
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = prefs.getString('lastEmail');
+    if (email != null && email.isNotEmpty && mounted) {
+      _emailController.text = email;
+    }
+  }
 
   @override
   void dispose() {
@@ -26,13 +53,30 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _saveAutoLoginPref(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('autoLoginEnabled', enabled);
+  }
+
   void _attemptLogin() {
     FocusScope.of(context).unfocus();
 
     context.read<AuthProvider>().login(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          onSuccess: () {
+          onSuccess: () async {
+            if (!mounted) return;
+
+            // 이메일 + 자동 로그인 설정 저장
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('lastEmail', _emailController.text.trim());
+            await _saveAutoLoginPref(_autoLogin);
+
+            // 자동 로그인 끈 경우 토큰 안 저장
+            if (!_autoLogin) {
+              await prefs.remove('eyeCatchRefreshToken');
+            }
+
             if (!mounted) return;
             Navigator.pushReplacementNamed(context, '/main');
           },
@@ -65,7 +109,6 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 로고 박스
               Container(
                 width: 56,
                 height: 56,
@@ -82,7 +125,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              // 헤드라인
               Text(
                 'Eye Catch에\n오신 걸 환영해요',
                 style: Theme.of(context).textTheme.displayLarge,
@@ -97,7 +139,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
 
-              // 이메일
               _FieldLabel(text: '이메일'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
@@ -111,7 +152,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              // 비밀번호
               _FieldLabel(text: '비밀번호'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
@@ -136,9 +176,64 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
 
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.md),
 
-              // 로그인 버튼
+              // 자동 로그인 체크박스
+              InkWell(
+                onTap: () => setState(() => _autoLogin = !_autoLogin),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: _autoLogin
+                              ? AppColors.accent
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: _autoLogin
+                                ? AppColors.accent
+                                : cs.outline,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: _autoLogin
+                            ? const Icon(
+                                Icons.check_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: AppSpacing.sm + 2),
+                      Text(
+                        '자동 로그인 유지',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: '다음에 앱 열 때 로그인 화면을 건너뜁니다',
+                        child: Icon(
+                          Icons.help_outline,
+                          size: 14,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: AppSpacing.lg),
+
               SoftButton(
                 label: isLoading ? '로그인 중...' : '로그인',
                 isLoading: isLoading,
@@ -147,7 +242,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // 회원가입 링크
               Center(
                 child: GestureDetector(
                   onTap: () => Navigator.push(

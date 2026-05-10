@@ -46,13 +46,15 @@ class SettingsProvider extends ChangeNotifier {
   }
 
   // 로그아웃 (토큰 및 데이터 삭제)
-  Future<void> logout(Function onSuccess) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('eyeCatchToken');
-    await prefs.remove('eyeCatchRefreshToken');  
-    await prefs.remove('eyeCatchUser');
-    onSuccess();
-  }
+Future<void> logout(Function onSuccess) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('eyeCatchToken');
+  await prefs.remove('eyeCatchRefreshToken');
+  await prefs.remove('eyeCatchUser');
+  // 자동 로그인 플래그도 끔 — 사용자가 명시적으로 로그아웃했으니까
+  await prefs.setBool('autoLoginEnabled', false);
+  onSuccess();
+}
 /// 회원 탈퇴 (DELETE /users/me).
 /// 성공하면 로컬 토큰/유저 정보 모두 정리.
 Future<bool> deleteAccount({

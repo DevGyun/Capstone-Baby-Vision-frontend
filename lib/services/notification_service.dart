@@ -1,5 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
+import '../main.dart'; // appNavigatorKey
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -8,6 +9,10 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  /// 앱이 종료된 상태에서 알림 탭으로 시작된 경우 받는 페이로드.
+  String? _launchPayload;
+  String? get launchPayload => _launchPayload;
 
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -20,27 +25,53 @@ class NotificationService {
       requestSoundPermission: true,
     );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsIOS,
     );
 
-    // ✅ v21+ 최신 버전 문법 (settings 명명 인자)
     await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
+      onDidReceiveNotificationResponse: _onNotificationTap,
     );
+
+    final launchDetails = await flutterLocalNotificationsPlugin
+        .getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp ?? false) {
+      _launchPayload = launchDetails?.notificationResponse?.payload;
+    }
   }
 
-  // ✅ 앱 최초 실행 시 알림 권한 팝업 강제 요청
+  void _onNotificationTap(NotificationResponse response) {
+    _navigateFromNotification(response.payload);
+  }
+
+  void _navigateFromNotification(String? payload) {
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) return;
+    navigator.pushNamedAndRemoveUntil('/main', (_) => false);
+  }
+
+  void handleLaunchPayload() {
+    if (_launchPayload != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigateFromNotification(_launchPayload);
+        _launchPayload = null;
+      });
+    }
+  }
+
   Future<void> requestPermissions() async {
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    final androidImpl =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidImpl?.requestNotificationsPermission();
   }
 
   Future<void> showTestNotification({String? title, String? body}) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'baby_vision_channel',
       'Baby Vision Alerts',
       channelDescription: '카메라 이상 현상 감지 알림',
@@ -58,17 +89,19 @@ class NotificationService {
       title: title ?? '🚨 이상 현상 감지 테스트',
       body: body ?? '카메라 화면에서 아기의 움직임이 감지되었습니다.',
       notificationDetails: platformDetails,
+      payload: 'alerts',
     );
   }
 
   Future<void> showUrgentNotification({String? title, String? body}) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
       'urgent_alert_channel',
       '긴급 위험 알림',
       channelDescription: '위험 구역 침입 등 긴급 상황 발생 시 화면을 깨우고 알림을 보냅니다.',
       importance: Importance.max,
       priority: Priority.high,
-      fullScreenIntent: true, // ✅ 화면 잠금을 뚫고 전화처럼 팝업을 띄우는 핵심 옵션
+      fullScreenIntent: true,
       enableVibration: true,
       playSound: true,
       color: Colors.red,
@@ -84,12 +117,12 @@ class NotificationService {
       ),
     );
 
-    // ✅ 오류 2, 3 해결: id, title, body 모두 명명 인자(이름표) 붙임
     await flutterLocalNotificationsPlugin.show(
-      id: DateTime.now().millisecond, // 알림이 겹치지 않게 고유 ID 부여
+      id: DateTime.now().millisecond,
       title: title ?? '🚨 위험 구역 침입 감지!',
       body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
       notificationDetails: platformDetails,
+      payload: 'alerts',
     );
   }
 }
