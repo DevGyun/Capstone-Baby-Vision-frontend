@@ -53,7 +53,61 @@ class SettingsProvider extends ChangeNotifier {
     await prefs.remove('eyeCatchUser');
     onSuccess();
   }
+/// 회원 탈퇴 (DELETE /users/me).
+/// 성공하면 로컬 토큰/유저 정보 모두 정리.
+Future<bool> deleteAccount({
+  required String password,
+  required Function() onSuccess,
+  required Function(String error) onError,
+}) async {
+  if (password.isEmpty) {
+    onError('비밀번호를 입력해 주세요');
+    return false;
+  }
 
+  _isLoading = true;
+  notifyListeners();
+
+  try {
+    final response = await ApiClient.request(
+      'DELETE',
+      '/users/me',
+      body: {'password': password},
+    );
+
+    if (response.statusCode == 200) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('eyeCatchToken');
+      await prefs.remove('eyeCatchRefreshToken');
+      await prefs.remove('eyeCatchUser');
+      onSuccess();
+      return true;
+    }
+
+    String? detail;
+    try {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['detail'] is String) {
+        detail = data['detail'] as String;
+      }
+    } catch (_) {}
+
+    if (response.statusCode == 400) {
+      onError(detail ?? '비밀번호가 틀렸어요');
+    } else if (response.statusCode == 401) {
+      onError('로그인이 만료됐어요. 다시 로그인 후 시도해 주세요');
+    } else {
+      onError(detail ?? '탈퇴에 실패했어요. 잠시 후 다시 시도해 주세요');
+    }
+    return false;
+  } catch (e) {
+    onError('서버와 통신할 수 없어요. 인터넷 연결을 확인해 주세요');
+    return false;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
   // 비밀번호 확인 (정보 수정 전 단계)
   Future<bool> verifyPassword(String password, Function(String) onError) async {
     _isLoading = true;

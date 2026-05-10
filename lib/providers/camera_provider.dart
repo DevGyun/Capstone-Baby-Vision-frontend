@@ -31,6 +31,25 @@ class CameraModel {
       isConnected: json['is_connected'] ?? false,
     );
   }
+
+  /// 일부 필드만 바꿔서 새 인스턴스 만들기.
+  /// 토글 같은 부분 업데이트에 사용.
+  CameraModel copyWith({
+    String? name,
+    String? hlsUrl,
+    String? streamUrl,
+    bool? isActive,
+    bool? isConnected,
+  }) {
+    return CameraModel(
+      id: id,
+      name: name ?? this.name,
+      hlsUrl: hlsUrl ?? this.hlsUrl,
+      streamUrl: streamUrl ?? this.streamUrl,
+      isActive: isActive ?? this.isActive,
+      isConnected: isConnected ?? this.isConnected,
+    );
+  }
 }
 
 class CameraProvider with ChangeNotifier {
@@ -154,6 +173,52 @@ class CameraProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // ── 카메라 모니터링 켜기/끄기 ──
+  /// PATCH /cameras/{id} 로 is_active 토글.
+  /// is_active=false 면 Vision 서비스가 분석 대상에서 제외함.
+  /// 낙관적 업데이트: UI를 먼저 바꾸고 서버 실패 시 롤백.
+  Future<bool> setCameraActive(int cameraId, bool isActive) async {
+    final idx = _cameras.indexWhere((c) => c.id == cameraId);
+    if (idx == -1) return false;
+
+    final original = _cameras[idx];
+    _cameras[idx] = original.copyWith(isActive: isActive);
+    notifyListeners();
+
+    try {
+      final response = await ApiClient.request(
+        'PATCH',
+        '/cameras/$cameraId',
+        body: {'is_active': isActive},
+      );
+
+      if (response.statusCode == 200) {
+        // 서버가 돌려준 최신 상태로 다시 동기화
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map<String, dynamic>) {
+            _cameras[idx] = CameraModel.fromJson(data);
+            notifyListeners();
+          }
+        } catch (_) {
+          // 파싱 실패해도 낙관적 업데이트 결과는 유지
+        }
+        return true;
+      }
+
+      // 실패 → 롤백
+      _cameras[idx] = original;
+      notifyListeners();
+      print('카메라 활성 토글 실패: ${response.statusCode} ${response.body}');
+      return false;
+    } catch (e) {
+      _cameras[idx] = original;
+      notifyListeners();
+      print('카메라 활성 토글 에러: $e');
+      return false;
     }
   }
 }

@@ -26,6 +26,95 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //   회원 탈퇴 다이얼로그
+  // ─────────────────────────────────────────────────────────────
+  void _showDeleteAccountDialog(BuildContext context) {
+    final passwordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.warning_amber_rounded, color: AppColors.danger),
+              SizedBox(width: AppSpacing.sm),
+              Text('회원 탈퇴'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '탈퇴하시면 아래 데이터가 영구 삭제되며 복구가 불가능해요.\n\n'
+                '• 등록된 모든 카메라\n'
+                '• 위험 구역 설정\n'
+                '• 알림 내역\n\n'
+                '계속하시려면 비밀번호를 입력해 주세요.',
+                style: TextStyle(fontSize: 13, height: 1.5),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: '현재 비밀번호',
+                  prefixIcon: Icon(Icons.lock),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소', style: TextStyle(color: Colors.grey)),
+            ),
+            Consumer<SettingsProvider>(
+              builder: (_, settings, __) => ElevatedButton(
+                onPressed: settings.isLoading
+                    ? null
+                    : () async {
+                        await context.read<SettingsProvider>().deleteAccount(
+                              password: passwordController.text,
+                              onSuccess: () {
+                                Navigator.pop(dialogContext);
+                                Navigator.pushNamedAndRemoveUntil(
+                                    context, '/login', (_) => false);
+                                _showSnack(context,
+                                    '계정이 삭제됐어요. 그동안 이용해 주셔서 감사합니다');
+                              },
+                              onError: (msg) => _showSnack(dialogContext, msg,
+                                  isError: true),
+                            );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                ),
+                child: settings.isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('탈퇴하기',
+                        style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -63,20 +152,26 @@ class SettingsScreen extends StatelessWidget {
               onPressed: () async {
                 final password = passwordController.text;
                 if (password.isEmpty) return;
-                
+
                 final isSuccess = await settings.verifyPassword(
-                  password, 
-                  (errorMsg) => _showSnack(context, errorMsg, isError: true)
-                );
+                    password,
+                    (errorMsg) => _showSnack(context, errorMsg, isError: true));
 
                 if (isSuccess && context.mounted) {
                   Navigator.pop(dialogContext);
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfileEditScreen()));
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const ProfileEditScreen()));
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
-              child: settings.isLoading 
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              child: settings.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
                   : const Text('확인', style: TextStyle(color: Colors.white)),
             ),
           ],
@@ -130,23 +225,31 @@ class SettingsScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: AppSpacing.xl),
             Text('계정 관리', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
             _buildListTile(context, '보호자 정보 수정', '비밀번호 및 이름 변경', Icons.person, onTap: showPasswordCheckDialog),
-            
+            _buildListTile(
+              context,
+              '회원 탈퇴',
+              '계정과 연결된 모든 데이터가 영구 삭제돼요',
+              Icons.no_accounts_outlined,
+              isDanger: true,
+              onTap: () => _showDeleteAccountDialog(context),
+            ),
+
             const SizedBox(height: AppSpacing.lg),
             Text('기기 연동', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: AppSpacing.sm),
             _buildListTile(
-            context,
-            '카메라 추가하기',
-            '라즈베리파이 화면에 표시된 6자리 코드를 입력해 연결해요',
-            Icons.add_a_photo_outlined,
-            onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AddCameraScreen()),
+              context,
+              '카메라 추가하기',
+              '라즈베리파이 화면에 표시된 6자리 코드를 입력해 연결해요',
+              Icons.add_a_photo_outlined,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddCameraScreen()),
               ),
             ),
 
@@ -167,16 +270,36 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildListTile(BuildContext context, String title, String subtitle, IconData icon, {VoidCallback? onTap}) {
+  Widget _buildListTile(
+    BuildContext context,
+    String title,
+    String subtitle,
+    IconData icon, {
+    VoidCallback? onTap,
+    bool isDanger = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
+    final accentColor = isDanger ? AppColors.danger : null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(AppRadius.lg)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
       child: ListTile(
         onTap: onTap,
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        subtitle: Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-        trailing: Icon(icon, color: cs.onSurfaceVariant),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+            color: accentColor,
+          ),
+        ),
+        subtitle: Text(subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+        trailing: Icon(icon, color: accentColor ?? cs.onSurfaceVariant),
       ),
     );
   }

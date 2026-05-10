@@ -70,7 +70,11 @@ class ApiClient {
         case 'PUT':
           return http.put(uri, headers: headers, body: jsonEncode(body ?? {}));
         case 'DELETE':
-          return http.delete(uri, headers: headers);
+  return http.delete(
+    uri,
+    headers: headers,
+    body: body == null ? null : jsonEncode(body),
+  );
         default:
           throw ArgumentError('지원하지 않는 method: $method');
       }
