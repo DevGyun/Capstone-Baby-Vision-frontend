@@ -338,10 +338,6 @@ void _removeZone(int index) {
   });
 }
 
-  void _editZone(int index) {
-    setState(() => _activeZoneIndex = index);
-  }
-
 void _clearAll() {
   setState(() {
     for (final z in _zones) {
@@ -503,108 +499,128 @@ void _clearAll() {
   }
 
   // ✅ HTML 기획안을 바탕으로 한 새로운 하단 컨트롤 패널
-  Widget _buildBottomControls(List<dynamic> cameras) {
-    final cs = Theme.of(context).colorScheme;
-    final isActive = _activeZoneIndex != null;
+Widget _buildBottomControls(List<dynamic> cameras) {
+  final cs = Theme.of(context).colorScheme;
+  final isActive = _activeZoneIndex != null;
 
-    if (isActive) {
-      final activeZone = _zones[_activeZoneIndex!];
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 1. 구역 이름 입력
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('구역 이름', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500)),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(
-  controller: _labelController,
-  onChanged: (val) {
-  activeZone.label = val;
-  setState(() {});   // 빈 setState — 버튼 상태만 갱신
-},  // setState 안 함 (controller가 알아서 처리)
-  decoration: InputDecoration(
-    hintText: '예: 주방 가스레인지, 베란다',
-    filled: true,
-    fillColor: cs.surfaceContainerLowest,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(AppRadius.md),
-      borderSide: BorderSide.none,
-    ),
-  ),
-),
-          const SizedBox(height: AppSpacing.md),
-
-          // 2. 위험 수위 버튼 (낮음, 중간, 높음)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('위험 수위', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, fontWeight: FontWeight.w500)),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  _buildLevelBtn(0, '낮음', Colors.green, activeZone),
-                  const SizedBox(width: AppSpacing.sm),
-                  _buildLevelBtn(1, '중간', Colors.orange, activeZone),
-                  const SizedBox(width: AppSpacing.sm),
-                  _buildLevelBtn(2, '높음', AppColors.danger, activeZone),
-                ],
+  if (isActive) {
+    final activeZone = _zones[_activeZoneIndex!];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 1. 구역 이름 입력
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('구역 이름',
+                style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _labelController,
+              onChanged: (val) {
+                activeZone.label = val;
+                setState(() {}); // 빈 setState — 버튼 상태만 갱신
+              },
+              decoration: InputDecoration(
+                hintText: '예: 주방 가스레인지, 베란다',
+                filled: true,
+                fillColor: cs.surfaceContainerLowest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: BorderSide.none,
+                ),
               ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
+            ),
+          ], // ← 추가: 구역 이름 Column children 닫기
+        ),   // ← 추가: 구역 이름 Column 닫기
+        const SizedBox(height: AppSpacing.md),
 
-          // 3. 토글 버튼들 (그리기 완료/되돌리기, 객체 감지)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-            decoration: BoxDecoration(color: cs.surfaceContainerLowest, borderRadius: BorderRadius.circular(AppRadius.md)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        // 2. 위험 수위 버튼 (낮음, 중간, 높음)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('위험 수위',
+                style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(backgroundColor: cs.surfaceContainerHigh, radius: 18, child: const Icon(Icons.view_in_ar, size: 18)),
-                    const SizedBox(width: AppSpacing.md),
-                    const Text('객체 감지', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                Switch(
-                  value: activeZone.objectDetectionEnabled,
-                  onChanged: (val) => setState(() => activeZone.objectDetectionEnabled = val),
-                  activeColor: AppColors.accent,
-                ),
+                _buildLevelBtn(0, '낮음', Colors.green, activeZone),
+                const SizedBox(width: AppSpacing.sm),
+                _buildLevelBtn(1, '중간', Colors.orange, activeZone),
+                const SizedBox(width: AppSpacing.sm),
+                _buildLevelBtn(2, '높음', AppColors.danger, activeZone),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
 
-          // 4. 액션 버튼
-          Row(
+        // 3. 토글 버튼들
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+          decoration: BoxDecoration(
+              color: cs.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(AppRadius.md)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.undo),
-                  label: const Text('점 지우기'),
-                  onPressed: _undoLastPoint,
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                ),
+              Row(
+                children: [
+                  CircleAvatar(
+                      backgroundColor: cs.surfaceContainerHigh,
+                      radius: 18,
+                      child: const Icon(Icons.view_in_ar, size: 18)),
+                  const SizedBox(width: AppSpacing.md),
+                  const Text('객체 감지',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ],
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                flex: 2,
-                child: FilledButton.icon(
-                  icon: const Icon(Icons.check),
-                  label: const Text('이 구역 완성'),
-                  onPressed: activeZone.isCompleted ? _finishCurrentZone : null,
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                ),
+              Switch(
+                value: activeZone.objectDetectionEnabled,
+                onChanged: (val) =>
+                    setState(() => activeZone.objectDetectionEnabled = val),
+                activeColor: AppColors.accent,
               ),
             ],
           ),
-        ],
-      );
-    }
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // 4. 액션 버튼
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.undo),
+                label: const Text('점 지우기'),
+                onPressed: _undoLastPoint,
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.check),
+                label: const Text('이 구역 완성'),
+                onPressed: activeZone.isCompleted ? _finishCurrentZone : null,
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16)),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
     // 기본 리스트 모드
     return Column(
