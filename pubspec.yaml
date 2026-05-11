@@ -18,12 +18,10 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   video_player: ^2.11.1             # HLS 스트리밍
   flutter_local_notifications: ^21.0.0
-  wifi_iot: ^0.3.18+1          # Wi-Fi 연결/스캔
-  multicast_dns: ^0.3.2+5      # mDNS로 브릿지 찾기
-  permission_handler: ^11.0.0   # 위치 권한 (Wi-Fi 스캔에 필요)
-  pointer_interceptor: ^0.10.1+2
-  network_info_plus: ^8.1.0
-  connectivity_plus: ^7.1.1
+  permission_handler: ^11.0.0       # 위치 권한 (Wi-Fi 이름 조회에 필요)
+  pointer_interceptor: ^0.10.1+2    # 웹 빌드에서 영상 위 버튼 클릭 보장
+  network_info_plus: ^8.1.0         # Wi-Fi SSID 조회 (페어링 플로우)
+  connectivity_plus: ^7.1.1         # 네트워크 변경 감지 (페어링 플로우)
 
 flutter:
   uses-material-design: true

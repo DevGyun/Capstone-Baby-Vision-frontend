@@ -137,7 +137,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
         return;
       }
 
-      // UI 갱신용 (안내문 변경)
+      // UI 갱신용 (안내문/폴백 버튼 노출)
       if (mounted) setState(() {});
     });
   }
@@ -259,7 +259,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       throw Exception('서버 응답 코드: ${r.statusCode}');
     } catch (e) {
       debugPrint('서버 도달 검증 실패: $e');
-      // 한 번 더 기회 — 사용자가 인터넷이 잘 안 잡혔을 수도 있음
       if (!mounted) return;
       setState(() {
         _currentStep = PairingStep.error;
@@ -281,7 +280,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       return;
     }
     if (_pairingCode.isEmpty) {
-      // 안전장치 — 도달하면 안 되지만 만약을 위해
       setState(() {
         _currentStep = PairingStep.error;
         _errorMessage = '페어링 코드가 없어요. 처음부터 다시 시도해 주세요.';
@@ -337,8 +335,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
   // 재시도
   // ─────────────────────────────────────────────────────────────
   void _retryFromError() {
-    // 코드를 이미 받았으면 → 인터넷 복귀부터 다시
-    // 코드가 없으면 → 핫스팟 연결부터 다시
     if (_pairingCode.isNotEmpty && !_isCodeExpired()) {
       _waitForInternetConnection();
     } else {
@@ -443,27 +439,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey, height: 1.5),
           ),
-          const SizedBox(height: 32),
-          OutlinedButton.icon(
-            onPressed: () async {
-              // Android Wi-Fi 설정 페이지 열기 (사용성 ↑)
-              try {
-                await const MethodChannel('android.settings.WIFI_SETTINGS')
-                    .invokeMethod('open');
-              } catch (_) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Wi-Fi 설정을 직접 열어 주세요')),
-                );
-              }
-            },
-            icon: const Icon(Icons.settings),
-            label: const Text('Wi-Fi 설정 열기'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white24),
-            ),
-          ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 40),
           const CircularProgressIndicator(),
           const SizedBox(height: 16),
           Text(

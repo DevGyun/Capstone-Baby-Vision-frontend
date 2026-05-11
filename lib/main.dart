@@ -31,6 +31,12 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 /// 시작 시 access token이 정말 유효한지 검증.
 /// 만료됐다면 refresh token으로 새로 받기까지 시도.
 /// 모두 실패하면 토큰 정리하고 false 반환.
+///
+/// 정책:
+/// - 200 → 통과, 사용자 정보 캐시
+/// - 401 → refresh 시도
+/// - 4xx (그 외) → 토큰 자체가 잘못된 것이므로 로그아웃
+/// - 5xx / 네트워크 에러 → 서버 문제이므로 통과 (캐시된 사용자 정보로 진행)
 Future<bool> _hasValidSession() async {
   final prefs = await SharedPreferences.getInstance();
 
@@ -41,8 +47,7 @@ Future<bool> _hasValidSession() async {
   final token = prefs.getString('eyeCatchToken');
   if (token == null || token.isEmpty) return false;
 
-
- try {
+  try {
     final response = await http.get(
       Uri.parse('${AppConfig.baseUrl}/users/me'),
       headers: {
@@ -60,8 +65,16 @@ Future<bool> _hasValidSession() async {
       return await _tryRefresh();
     }
 
+    // 4xx (인증 외) — 토큰이나 요청이 잘못됐을 가능성. 안전하게 로그아웃.
+    if (response.statusCode >= 400 && response.statusCode < 500) {
+      await _clearTokens();
+      return false;
+    }
+
+    // 5xx — 서버 문제, 사용자 잘못 아님. 캐시로 진행.
     return true;
   } catch (e) {
+    // 네트워크 단절 등 — 오프라인일 수도 있으니 사용자 강제 로그아웃 X
     print('세션 검증 중 네트워크 에러: $e');
     return true;
   }
@@ -118,7 +131,6 @@ void main() async {
 
   String initialRoute = '/onboarding';
   if (hasSeenOnboarding) {
-    // ✨ 토큰 존재만 보지 말고 실제 유효성도 확인
     final isValid = await _hasValidSession();
     initialRoute = isValid ? '/main' : '/login';
   }
@@ -136,7 +148,7 @@ void main() async {
     ),
   );
   // 앱 시작 후 첫 프레임 그려진 다음, 종료 상태 알림 탭이었다면 라우팅 보정
-NotificationService().handleLaunchPayload();
+  NotificationService().handleLaunchPayload();
 }
 
 class EyeCatchApp extends StatelessWidget {
