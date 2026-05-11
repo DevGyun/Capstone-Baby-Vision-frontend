@@ -7,13 +7,24 @@ Widget getPlatformPlayer(
   VoidCallback? onConnected,
   VoidCallback? onRetry,
 }) {
-  return WebHlsPlayer(hlsUrl: hlsUrl);
+  return WebHlsPlayer(
+    hlsUrl: hlsUrl,
+    onConnected: onConnected,
+    onRetry: onRetry,
+  );
 }
 
 class WebHlsPlayer extends StatefulWidget {
   final String hlsUrl;
+  final VoidCallback? onConnected;
+  final VoidCallback? onRetry;
 
-  const WebHlsPlayer({super.key, required this.hlsUrl});
+  const WebHlsPlayer({
+    super.key,
+    required this.hlsUrl,
+    this.onConnected,
+    this.onRetry,
+  });
 
   @override
   State<WebHlsPlayer> createState() => _WebHlsPlayerState();
@@ -42,6 +53,14 @@ class _WebHlsPlayerState extends State<WebHlsPlayer> {
         ..style.height = '100%'
         ..allowFullscreen = true
         ..allow = 'autoplay; fullscreen; camera; microphone';
+
+      // iframe 로드가 완료되면 onConnected 콜백을 실행하여 배너를 숨깁니다.
+      iframe.onLoad.listen((event) {
+        if (widget.onConnected != null) {
+          widget.onConnected!();
+        }
+      });
+
       return iframe;
     });
   }

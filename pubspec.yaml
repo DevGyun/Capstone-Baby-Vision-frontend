@@ -22,6 +22,8 @@ dependencies:
   multicast_dns: ^0.3.2+5      # mDNS로 브릿지 찾기
   permission_handler: ^11.0.0   # 위치 권한 (Wi-Fi 스캔에 필요)
   pointer_interceptor: ^0.10.1+2
+  network_info_plus: ^8.1.0
+  connectivity_plus: ^7.1.1
 
 flutter:
   uses-material-design: true

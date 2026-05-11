@@ -1,17 +1,26 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:permission_handler/permission_handler.dart';
 
 import '../providers/camera_provider.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common/common.dart';
+import '../widgets/common/soft_button.dart';
 
-/// 카메라 등록 화면 (페어링 코드 방식).
-///
-/// 흐름:
-/// 1. 라즈베리파이 부팅 시 백엔드가 6자리 코드 발급 (10분 유효)
-/// 2. 카메라가 코드 표시
-/// 3. 사용자: 이름 + 6자리 코드 입력 → POST /bridges/pair
+enum PairingStep {
+  connectToBridgeWifi,     // 1. 브릿지 핫스팟 연결 대기
+  fetchingCodeFromBridge,  // 2. 브릿지와 직접 통신하여 코드 발급
+  reconnectToInternet,     // 3. 원래 인터넷으로 복귀 대기
+  inputCameraName,         // 4. (추가) 카메라 이름 설정
+  pairingWithServer,       // 5. 서버에 페어링 요청
+  done,                    // 6. 성공
+  error,                   // 오류 발생
+}
+
 class AddCameraScreen extends StatefulWidget {
   const AddCameraScreen({super.key});
 
@@ -20,527 +29,280 @@ class AddCameraScreen extends StatefulWidget {
 }
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
-  final _nameController = TextEditingController();
-  final _codeController = TextEditingController();
-  final _codeFocus = FocusNode();
-  final _nameFocus = FocusNode();
+  PairingStep _currentStep = PairingStep.connectToBridgeWifi;
+  String _errorMessage = '';
+  String _pairingCode = '';
+  
+  final TextEditingController _nameController = TextEditingController();
+  
+  Timer? _wifiCheckTimer;
+  StreamSubscription? _connectivitySubscription;
+
+  // 설정하신 핫스팟 이름 앞부분 및 로컬 IP
+  final String _bridgeSSIDPrefix = 'EyeCatch-Setup-';
+  final String _bridgeLocalIp = 'http://192.168.4.1'; 
 
   @override
   void initState() {
     super.initState();
-    // 코드 입력 변화 시 재빌드 (6자리 채워졌나 표시용)
-    _codeController.addListener(() => setState(() {}));
-    _nameController.addListener(() => setState(() {}));
+    _requestPermissionAndStart();
   }
 
   @override
   void dispose() {
+    _wifiCheckTimer?.cancel();
+    _connectivitySubscription?.cancel();
     _nameController.dispose();
-    _codeController.dispose();
-    _codeFocus.dispose();
-    _nameFocus.dispose();
     super.dispose();
   }
 
-  bool get _canSubmit {
-    final name = _nameController.text.trim();
-    final code = _codeController.text.trim();
-    return name.isNotEmpty && code.length == 6;
+  /// 권한 요청 후 와이파이 체크 시작 (안드로이드 8 이상 필수)
+  Future<void> _requestPermissionAndStart() async {
+    final status = await Permission.locationWhenInUse.request();
+    if (status.isGranted) {
+      _startWifiCheckLoop();
+    } else {
+      setState(() {
+        _currentStep = PairingStep.error;
+        _errorMessage = '위치 권한을 허용해야 Wi-Fi 연결을 확인할 수 있습니다.';
+      });
+    }
   }
 
-  String? _validate() {
-    final name = _nameController.text.trim();
-    final code = _codeController.text.trim();
-    if (name.isEmpty) return '카메라 이름을 입력해 주세요.';
-    if (name.length > 100) return '카메라 이름은 100자 이내로 입력해 주세요.';
-    if (code.isEmpty) return '페어링 코드를 입력해 주세요.';
-    if (code.length != 6) return '페어링 코드는 6자리 숫자예요.';
-    return null;
+  /// 1. Wi-Fi 연결 감지 루프
+  void _startWifiCheckLoop() {
+    _wifiCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (_currentStep != PairingStep.connectToBridgeWifi) {
+        timer.cancel();
+        return;
+      }
+
+      final info = NetworkInfo();
+      String? ssid = await info.getWifiName();
+      ssid = ssid?.replaceAll('"', ''); // 안드로이드 따옴표 제거
+
+      if (ssid != null && ssid.startsWith(_bridgeSSIDPrefix)) {
+        timer.cancel();
+        _fetchCodeFromBridge();
+      }
+    });
   }
 
-  Future<void> _onSubmit() async {
-  FocusScope.of(context).unfocus();
-  final error = _validate();
-  if (error != null) {
-    _showSnack(error, isError: true);
-    return;
+  /// 2. 브릿지에서 코드를 받아옵니다 (로컬 통신)
+  Future<void> _fetchCodeFromBridge() async {
+    setState(() {
+      _currentStep = PairingStep.fetchingCodeFromBridge;
+      _errorMessage = '';
+    });
+
+    try {
+      final response = await http.get(Uri.parse('$_bridgeLocalIp/register'))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _pairingCode = data['code'];
+        _waitForInternetConnection();
+      } else {
+        throw Exception('브릿지 오류: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _currentStep = PairingStep.error;
+        _errorMessage = '카메라 정보를 받아오지 못했습니다.\n다시 시도해주세요.';
+      });
+    }
   }
 
+  /// 3. 사용자망 복귀 감지
+  void _waitForInternetConnection() {
+    setState(() {
+      _currentStep = PairingStep.reconnectToInternet;
+    });
 
-  final provider = context.read<CameraProvider>();
-  final success = await provider.pairCamera(
-    pairingCode: _codeController.text.trim(),
-    name: _nameController.text.trim(),
-  );
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+      (List<ConnectivityResult> results) async {
+        if (results.contains(ConnectivityResult.mobile) || 
+            results.contains(ConnectivityResult.wifi)) {
+          
+          final info = NetworkInfo();
+          String? ssid = await info.getWifiName();
+          ssid = ssid?.replaceAll('"', '');
 
-  if (!mounted) return;
-
-  if (success) {
-    // SnackBar는 메인 화면이 justPairedCameraName을 보고 띄움.
-    // 여기선 그냥 닫기만.
-    Navigator.pop(context);
-  } else {
-    _showSnack(provider.lastErrorMessage ?? '연결에 실패했어요', isError: true);
-  }
-}
-  /// 클립보드에서 6자리 코드 가져와서 입력 필드에 붙여넣기.
-Future<void> _pasteFromClipboard() async {
-  final data = await Clipboard.getData(Clipboard.kTextPlain);
-  final text = data?.text ?? '';
-
-  // 숫자만 추출
-  final digits = text.replaceAll(RegExp(r'[^0-9]'), '');
-
-  if (digits.isEmpty) {
-    _showSnack('클립보드에 숫자가 없어요', isError: true);
-    return;
-  }
-
-  if (digits.length < 6) {
-    _showSnack('6자리 숫자가 필요해요', isError: true);
-    return;
-  }
-
-  // 6자리만 사용
-  final code = digits.substring(0, 6);
-  _codeController.text = code;
-  _codeController.selection = TextSelection.fromPosition(
-    TextPosition(offset: code.length),
-  );
-  FocusScope.of(context).unfocus();
-
-  _showSnack('코드를 붙여넣었어요', isError: false);
-}
-
-  void _showSnack(String message, {required bool isError}) {
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isError ? Icons.error_outline : Icons.check_circle_outline,
-              size: 20,
-              color: isError ? AppColors.danger : AppColors.success,
-            ),
-            const SizedBox(width: AppSpacing.sm + 2),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+          // 핫스팟과 연결이 끊겼다면 이름 입력 화면으로 전환
+          if (ssid == null || !ssid.startsWith(_bridgeSSIDPrefix)) {
+            _connectivitySubscription?.cancel();
+            setState(() {
+              _currentStep = PairingStep.inputCameraName;
+            });
+          }
+        }
+      },
     );
+  }
+
+  /// 4, 5. 작성하신 Provider를 활용하여 메인 서버로 페어링 요청
+  Future<void> _pairWithServer() async {
+    if (_nameController.text.trim().isEmpty) return;
+
+    setState(() {
+      _currentStep = PairingStep.pairingWithServer;
+    });
+
+    // camera_provider에 이미 구현된 로직 실행 (토큰, 헤더, 리스트 갱신 모두 자동)
+    final provider = context.read<CameraProvider>();
+    final success = await provider.pairCamera(
+      pairingCode: _pairingCode,
+      name: _nameController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() => _currentStep = PairingStep.done);
+    } else {
+      setState(() {
+        _currentStep = PairingStep.error;
+        // provider 내부에서 에러 메시지를 세팅해두었으므로 이를 그대로 활용
+        _errorMessage = provider.lastErrorMessage ?? '서버 등록에 실패했습니다.';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isLoading = context.watch<CameraProvider>().isLoading;
-
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('카메라 추가', style: TextStyle(color: Colors.white)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('카메라 연결'),
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.sm,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: AppSpacing.sm),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: _buildBody(),
+        ),
+      ),
+    );
+  }
 
-              // ── 헤드라인 ──
-              Text(
-                '새 카메라를\n연결해 보세요',
-                style: Theme.of(context).textTheme.displayLarge,
-              ),
-              const SizedBox(height: AppSpacing.sm + 2),
-              Text(
-                '카메라 화면에 표시된 6자리 코드를 입력하면 내 계정에 연결돼요.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-              ),
+  Widget _buildBody() {
+    switch (_currentStep) {
+      case PairingStep.connectToBridgeWifi:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.wifi_find, size: 80, color: AppColors.accent),
+            SizedBox(height: 24),
+            Text('카메라 핫스팟에 연결해주세요', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            SizedBox(height: 12),
+            Text('스마트폰 Wi-Fi 설정에서\n"EyeCatch-Setup-XXXX"를 선택해주세요.', 
+              textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            SizedBox(height: 40),
+            CircularProgressIndicator(),
+          ],
+        );
+      
+      case PairingStep.fetchingCodeFromBridge:
+        return _buildLoadingState('카메라 정보를 불러오고 있습니다...');
 
-              const SizedBox(height: AppSpacing.xl),
-
-              // ── 안내 카드 (3단계) ──
-              _GuideCard(),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              // ── 카메라 이름 ──
-              _FieldLabel(text: '카메라 이름'),
-              const SizedBox(height: AppSpacing.sm),
-              TextField(
-                controller: _nameController,
-                focusNode: _nameFocus,
-                textInputAction: TextInputAction.next,
-                maxLength: 100,
-                onSubmitted: (_) => _codeFocus.requestFocus(),
-                decoration: const InputDecoration(
-                  hintText: '예: 아기방, 거실, 베란다',
-                  prefixIcon: Icon(Icons.videocam_outlined, size: 20),
-                  counterText: '',
+      case PairingStep.reconnectToInternet:
+         return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.wifi_off, size: 80, color: AppColors.warning),
+            SizedBox(height: 24),
+            Text('원래 인터넷으로 돌아와주세요', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            SizedBox(height: 12),
+            Text('카메라 핫스팟 연결을 끊고\n평소에 쓰시는 Wi-Fi나 데이터로 변경해주세요.', 
+              textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+          ],
+        );
+      
+      case PairingStep.inputCameraName:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.edit, size: 80, color: AppColors.accent),
+            const SizedBox(height: 24),
+            const Text('카메라 이름을 정해주세요', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.black),
+              decoration: InputDecoration(
+                hintText: '예: 거실 카메라, 아기방',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
                 ),
               ),
-
-              const SizedBox(height: AppSpacing.lg),
-
-              // ── 페어링 코드 ──
-// ── 페어링 코드 ──
-Row(
-  children: [
-    _FieldLabel(text: '페어링 코드'),
-    const Spacer(),
-    // 6자리 입력 진행 표시 (5/6, 6/6 등)
-    AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: _codeController.text.isEmpty
-          ? const SizedBox.shrink()
-          : Text(
-              '${_codeController.text.length}/6',
-              key: ValueKey(_codeController.text.length),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: _codeController.text.length == 6
-                        ? AppColors.accent
-                        : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
             ),
-    ),
-    const SizedBox(width: AppSpacing.sm),
-    // 붙여넣기 버튼
-    InkWell(
-      onTap: _pasteFromClipboard,
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.content_paste_rounded,
-                size: 14, color: AppColors.accent),
-            const SizedBox(width: 4),
-            Text(
-              '붙여넣기',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.accent,
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: SoftButton(
+                label: '이 이름으로 등록하기',
+                onPressed: _pairWithServer,
               ),
             ),
           ],
-        ),
-      ),
-    ),
-  ],
-),
-              const SizedBox(height: AppSpacing.sm),
-              _PairingCodeField(
-                controller: _codeController,
-                focusNode: _codeFocus,
-                onComplete: _onSubmit,
-              ),
+        );
 
-              const SizedBox(height: AppSpacing.md - 2),
+      case PairingStep.pairingWithServer:
+        return _buildLoadingState('서버에 카메라를 등록하는 중입니다...');
 
-              // 만료 안내 - 작게
-              Row(
-                children: [
-                  Icon(
-                    Icons.schedule_outlined,
-                    size: 14,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '코드는 발급 후 10분간 유효해요',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: AppSpacing.xl),
-
-              // ── 등록 버튼 ──
-              SoftButton(
-                label: isLoading ? '연결 중...' : '카메라 연결하기',
-                icon: isLoading ? null : Icons.link_rounded,
-                isLoading: isLoading,
-                onPressed: _canSubmit ? _onSubmit : null,
-              ),
-
-              const SizedBox(height: AppSpacing.lg),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 라벨 (필드 위 텍스트)
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-    );
-  }
-}
-
-/// 1, 2, 3 단계 페어링 안내 카드
-class _GuideCard extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return SoftCard(
-      color: AppColors.accentSoft(context),
-      bordered: false,
-      padding: const EdgeInsets.all(AppSpacing.md + 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                size: 18,
-                color: AppColors.accent,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                '연결 전에 확인해 주세요',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md - 4),
-          _GuideStep(num: 1, text: '카메라(라즈베리파이)의 전원이 켜져 있어요'),
-          const SizedBox(height: AppSpacing.sm + 2),
-          _GuideStep(num: 2, text: '카메라 화면에 6자리 코드가 표시돼요'),
-          const SizedBox(height: AppSpacing.sm + 2),
-          _GuideStep(num: 3, text: '아래에 이름과 코드를 입력하면 끝이에요'),
-        ],
-      ),
-    );
-  }
-}
-
-class _GuideStep extends StatelessWidget {
-  final int num;
-  final String text;
-  const _GuideStep({required this.num, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 22,
-          height: 22,
-          margin: const EdgeInsets.only(top: 1, right: AppSpacing.sm + 2),
-          decoration: const BoxDecoration(
-            color: AppColors.accent,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '$num',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+      case PairingStep.done:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.check_circle, size: 80, color: AppColors.success),
+            const SizedBox(height: 24),
+            const Text('연결 완료!', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 40),
+            SoftButton(
+              label: '메인으로 돌아가기',
+              onPressed: () => Navigator.pop(context),
             ),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Text(
-              text,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+          ],
+        );
 
-/// 6자리 페어링 코드 입력 필드.
-/// 6개 박스로 시각적으로 분리해서 OTP 입력처럼 보이게 함.
-class _PairingCodeField extends StatelessWidget {
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final VoidCallback onComplete;
-
-  const _PairingCodeField({
-    required this.controller,
-    required this.focusNode,
-    required this.onComplete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = controller.text;
-
-    return GestureDetector(
-      onTap: () => focusNode.requestFocus(),
-      behavior: HitTestBehavior.opaque,
-      child: Stack(
-        children: [
-          // 시각적인 6개 박스
-          Row(
-            children: List.generate(6, (i) {
-              final hasChar = i < text.length;
-              final isActiveCursor = i == text.length && focusNode.hasFocus;
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(right: i == 5 ? 0 : AppSpacing.sm),
-                  child: Container(
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(
-                        color: isActiveCursor
-                            ? AppColors.accent
-                            : (hasChar
-                                ? cs.outline
-                                : cs.outlineVariant),
-                        width: isActiveCursor ? 1.5 : 0.5,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: hasChar
-                        ? Text(
-                            text[i],
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              color: cs.onSurface,
-                            ),
-                          )
-                        : (isActiveCursor
-                            ? _BlinkingCursor()
-                            : const SizedBox.shrink()),
-                  ),
-                ),
-              );
-            }),
-          ),
-          // 실제 입력 받는 투명 TextField (위 박스들 위에 겹쳐짐)
-          Positioned.fill(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              textInputAction: TextInputAction.done,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              showCursor: false,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
-              ],
-              onChanged: (v) {
-                if (v.length == 6) {
-                  // 6자리 완성 시 키보드만 닫음 (자동 제출은 안 함 — 사용자 의도 존중)
-                  FocusScope.of(context).unfocus();
-                }
+      case PairingStep.error:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 80, color: AppColors.danger),
+            const SizedBox(height: 24),
+            Text(_errorMessage, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 40),
+            SoftButton(
+              label: '다시 시도',
+              onPressed: () {
+                _requestPermissionAndStart();
+                setState(() => _currentStep = PairingStep.connectToBridgeWifi);
               },
-              style: const TextStyle(
-                color: Colors.transparent,
-                fontSize: 1,
-                height: 1,
-              ),
-              cursorColor: Colors.transparent,
-              decoration: const InputDecoration(
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                fillColor: Colors.transparent,
-                filled: true,
-                counterText: '',
-              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 깜빡이는 커서 (현재 활성 박스 표시)
-class _BlinkingCursor extends StatefulWidget {
-  @override
-  State<_BlinkingCursor> createState() => _BlinkingCursorState();
-}
-
-class _BlinkingCursorState extends State<_BlinkingCursor>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
+          ],
+        );
+    }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _controller,
-      child: Container(
-        width: 2,
-        height: 26,
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(1),
-        ),
-      ),
+  Widget _buildLoadingState(String message) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const CircularProgressIndicator(),
+        const SizedBox(height: 24),
+        Text(message, style: const TextStyle(color: Colors.white)),
+      ],
     );
   }
 }

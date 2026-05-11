@@ -50,7 +50,26 @@ class ApiClient {
     appNavigatorKey.currentState
         ?.pushNamedAndRemoveUntil('/login', (_) => false);
   }
+Future<bool> registerCameraPairing(String code) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.baseUrl}/bridges/pair'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'code': code}),
+      );
 
+      // 성공(200) 시 true 반환
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('페어링 실패: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('서버 통신 에러: $e');
+      throw Exception('서버 페어링 실패');
+    }
+  }
   /// GET / POST / PATCH / PUT / DELETE 공통 래퍼
   static Future<http.Response> request(
     String method,
