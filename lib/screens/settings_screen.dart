@@ -6,7 +6,6 @@ import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
 import 'add_camera_screen.dart';
-import '../providers/theme_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
