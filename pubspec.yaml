@@ -18,10 +18,9 @@ dependencies:
   flutter_launcher_icons: ^0.13.1
   video_player: ^2.11.1             # HLS 스트리밍
   flutter_local_notifications: ^21.0.0
-  permission_handler: ^11.0.0       # 위치 권한 (Wi-Fi 이름 조회에 필요)
+  permission_handler: ^11.0.0       # BLE / 위치 권한
   pointer_interceptor: ^0.10.1+2    # 웹 빌드에서 영상 위 버튼 클릭 보장
-  network_info_plus: ^8.1.0         # Wi-Fi SSID 조회 (페어링 플로우)
-  connectivity_plus: ^7.1.1         # 네트워크 변경 감지 (페어링 플로우)
+  flutter_blue_plus: ^1.32.12       # BLE 페어링 (브릿지 핫스팟→BLE 마이그레이션)
 
 flutter:
   uses-material-design: true

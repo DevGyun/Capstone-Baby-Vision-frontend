@@ -271,7 +271,7 @@ class SettingsScreen extends StatelessWidget {
             _buildListTile(
               context,
               '카메라 추가하기',
-              '라즈베리파이 화면에 표시된 6자리 코드를 입력해 연결해요',
+              '주변 카메라를 블루투스로 자동으로 찾아 연결해요',  // ← 이렇게 변경
               Icons.add_a_photo_outlined,
               onTap: () => Navigator.push(
                 context,
