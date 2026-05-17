@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_client.dart';
+import '../services/camera_snapshot_storage.dart';
 
 // 백엔드 응답 구조에 맞게 정의
 class CameraModel {
@@ -165,15 +166,17 @@ class CameraProvider with ChangeNotifier {
   }
 
   // ── 카메라 삭제 ──
-  Future<bool> removeCamera(int cameraId) async {
-    _isLoading = true;
-    notifyListeners();
-    try {
-      final response = await ApiClient.request('DELETE', '/cameras/$cameraId');
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        _cameras.removeWhere((c) => c.id == cameraId);
-        return true;
-      }
+ Future<bool> removeCamera(int cameraId) async {
+  _isLoading = true;
+  notifyListeners();
+  try {
+    final response = await ApiClient.request('DELETE', '/cameras/$cameraId');
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      _cameras.removeWhere((c) => c.id == cameraId);
+      // 스냅샷 캐시도 함께 정리
+      await CameraSnapshotStorage.remove(cameraId);
+      return true;
+    }
       print('카메라 삭제 실패: ${response.statusCode}');
       return false;
     } catch (e) {

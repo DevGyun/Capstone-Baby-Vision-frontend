@@ -1,12 +1,19 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/camera_provider.dart';
 import '../services/api_client.dart';
+import '../services/camera_snapshot_storage.dart';
 import '../services/zone_settings_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
+import '../widgets/hls_player.dart';
 import '../widgets/polygon_painter.dart';
 
 /// 백엔드 위험구역 모델.
@@ -43,10 +50,9 @@ class _EditableZone {
   String label;
   List<Offset> points;
 
-  int dangerLevel;            // 0=낮음, 1=중간, 2=높음 (기기 로컬 저장)
-  bool objectDetectionEnabled; // 기기 로컬 저장
+  int dangerLevel;
+  bool objectDetectionEnabled;
 
-  // 마지막으로 서버에서 받았을 때의 원본 스냅샷
   String? _originalLabel;
   List<Offset>? _originalPoints;
 
@@ -64,13 +70,11 @@ class _EditableZone {
     return points.map((p) => [p.dx, p.dy]).toList();
   }
 
-  /// 서버에서 받은 직후 호출 — 현재 값을 "원본"으로 저장
   void markAsClean() {
     _originalLabel = label;
     _originalPoints = List<Offset>.from(points);
   }
 
-  /// 서버에 이미 저장돼있고, 그 후로 수정됐는가
   bool get isDirty {
     if (serverId == null) return false;
     if (_originalLabel == null) return true;
@@ -84,6 +88,12 @@ class _EditableZone {
   }
 }
 
+/// 배경 모드
+/// - cached: 저장된 스냅샷 이미지 사용
+/// - liveCapturing: 라이브 영상 띄우고 캡처 대기
+/// - placeholder: 스냅샷 없음 + 라이브도 못 띄움
+enum _BackgroundMode { cached, liveCapturing, placeholder }
+
 class ZoneScreen extends StatefulWidget {
   const ZoneScreen({super.key});
 
@@ -91,8 +101,7 @@ class ZoneScreen extends StatefulWidget {
   State<ZoneScreen> createState() => _ZoneScreenState();
 }
 
-class _ZoneScreenState extends State<ZoneScreen>
-    with WidgetsBindingObserver {
+class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
   int _selectedCameraIndex = 0;
   int? _currentLoadedCameraId;
   Size? _canvasSize;
@@ -105,40 +114,45 @@ class _ZoneScreenState extends State<ZoneScreen>
   bool _isLoading = false;
   bool _isSaving = false;
 
+  // ── 배경 캡처 관련 ────────────────────────────────────
+  File? _cachedSnapshot; // 캐시된 정적 이미지
+  _BackgroundMode _bgMode = _BackgroundMode.placeholder;
+  bool _captureScheduled = false; // 라이브 연결 후 자동 캡처 예약 여부
+  final GlobalKey _liveCaptureKey = GlobalKey(); // 라이브 영상 캡처용
+
   bool get _hasUnsavedChanges {
     if (_pendingDeleteIds.isNotEmpty) return true;
     for (final z in _zones) {
-      if (z.serverId == null) return true; // 신규
-      if (z.isDirty) return true; // 수정
+      if (z.serverId == null) return true;
+      if (z.isDirty) return true;
     }
     return false;
   }
 
-@override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addObserver(this);
-}
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
-@override
-void dispose() {
-  WidgetsBinding.instance.removeObserver(this);
-  _labelController.dispose();
-  super.dispose();
-}
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _labelController.dispose();
+    super.dispose();
+  }
 
-@override
-void didChangeAppLifecycleState(AppLifecycleState state) {
-  super.didChangeAppLifecycleState(state);
-  // 포그라운드로 돌아오면 현재 카메라의 zone을 다시 로드
-  if (state == AppLifecycleState.resumed && mounted) {
-    final cameras = context.read<CameraProvider>().cameras;
-    if (cameras.isNotEmpty && _currentLoadedCameraId != null) {
-      final safeIdx = _selectedCameraIndex.clamp(0, cameras.length - 1);
-      _loadZones(cameras[safeIdx].id);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      final cameras = context.read<CameraProvider>().cameras;
+      if (cameras.isNotEmpty && _currentLoadedCameraId != null) {
+        final safeIdx = _selectedCameraIndex.clamp(0, cameras.length - 1);
+        _loadZones(cameras[safeIdx].id);
+      }
     }
   }
-}
 
   static const double _handleHitRadius = 24;
 
@@ -168,7 +182,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   // ─────────────────────────────────────────────
-  //   서버 + 로컬 설정 로드
+  //   스냅샷 캐시 + 위험구역 로드
   // ─────────────────────────────────────────────
   Future<void> _loadZones(int cameraId) async {
     if (_canvasSize == null) return;
@@ -177,12 +191,16 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       _zones.clear();
       _pendingDeleteIds.clear();
       _activeZoneIndex = null;
+      _cachedSnapshot = null;
+      _captureScheduled = false;
     });
 
     try {
-      // 로컬 설정 먼저 로드
-      final localSettings = await ZoneSettingsStorage.loadAll();
+      // 1) 캐시된 배경 스냅샷 확인
+      final cached = await CameraSnapshotStorage.load(cameraId);
 
+      // 2) 위험구역 + 로컬 설정
+      final localSettings = await ZoneSettingsStorage.loadAll();
       final response =
           await ApiClient.request('GET', '/danger-zones/$cameraId');
 
@@ -207,6 +225,11 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
           _zones.addAll(loaded);
           _currentLoadedCameraId = cameraId;
           _isLoading = false;
+          _cachedSnapshot = cached;
+          // 캐시 있으면 정적 배경, 없으면 라이브 띄워서 캡처 모드
+          _bgMode = cached != null
+              ? _BackgroundMode.cached
+              : _BackgroundMode.liveCapturing;
         });
       } else {
         setState(() => _isLoading = false);
@@ -219,7 +242,71 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   // ─────────────────────────────────────────────
-  //   저장
+  //   배경 캡처 (라이브 영상 → 정적 이미지)
+  // ─────────────────────────────────────────────
+
+  /// 라이브 영상이 연결되면 자동으로 한 프레임 캡처.
+  /// HlsPlayer의 onConnected 콜백에서 호출됨.
+  void _onLiveConnected() {
+    if (_captureScheduled || _bgMode != _BackgroundMode.liveCapturing) return;
+    _captureScheduled = true;
+
+    // 영상이 안정적으로 디코딩될 때까지 살짝 대기 후 캡처
+    Future.delayed(const Duration(milliseconds: 1500), () async {
+      if (!mounted) return;
+      await _captureLiveFrameToCache();
+    });
+  }
+
+  /// 라이브 영상을 캡처해 캐시 폴더에 저장
+  Future<void> _captureLiveFrameToCache() async {
+    final cameras = context.read<CameraProvider>().cameras;
+    if (cameras.isEmpty || _currentLoadedCameraId == null) return;
+
+    try {
+      final boundary = _liveCaptureKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final dpr = MediaQuery.of(context).devicePixelRatio;
+      final image = await boundary.toImage(pixelRatio: dpr);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final pngBytes = byteData.buffer.asUint8List();
+
+      await CameraSnapshotStorage.save(_currentLoadedCameraId!, pngBytes);
+
+      // 캐시 모드로 전환
+      final cached = await CameraSnapshotStorage.load(_currentLoadedCameraId!);
+      if (!mounted) return;
+      setState(() {
+        _cachedSnapshot = cached;
+        _bgMode = _BackgroundMode.cached;
+        _captureScheduled = false;
+      });
+    } catch (e) {
+      print('배경 캡처 실패: $e');
+      if (mounted) {
+        setState(() {
+          _bgMode = _BackgroundMode.placeholder;
+          _captureScheduled = false;
+        });
+      }
+    }
+  }
+
+  /// 사용자가 "배경 새로고침" 누르면 라이브 영상 다시 띄움
+  void _refreshBackground() {
+    if (_currentLoadedCameraId == null) return;
+    setState(() {
+      _cachedSnapshot = null;
+      _bgMode = _BackgroundMode.liveCapturing;
+      _captureScheduled = false;
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  //   저장 (기존과 동일)
   // ─────────────────────────────────────────────
   Future<void> _saveZones(int cameraId) async {
     if (_isSaving) return;
@@ -236,7 +323,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       bool anyFailed = false;
       String? failReason;
 
-      // 1) 삭제 — 화면에서 지운 것들
       for (final id in _pendingDeleteIds) {
         try {
           final r = await ApiClient.request('DELETE', '/danger-zones/$id');
@@ -250,7 +336,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
         }
       }
 
-      // 2) 신규 + 수정
       for (var i = 0; i < _zones.length; i++) {
         final zone = _zones[i];
         final labelToSave =
@@ -258,7 +343,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
         try {
           if (zone.serverId == null) {
-            // 신규 → POST
             final r = await ApiClient.request(
               'POST',
               '/danger-zones',
@@ -273,7 +357,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
               zone.serverId = newId;
               zone.label = labelToSave;
               zone.markAsClean();
-              // 로컬 설정 저장
               await ZoneSettingsStorage.save(
                 newId,
                 ZoneLocalSettings(
@@ -286,7 +369,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
               failReason = '구역 생성 실패 (${r.statusCode})';
             }
           } else if (zone.isDirty) {
-            // 수정 → PUT (서버 필드만)
             final r = await ApiClient.request(
               'PUT',
               '/danger-zones/${zone.serverId}',
@@ -304,7 +386,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             }
           }
 
-          // 로컬 설정은 항상 보장 (위험수위/객체감지가 같이 바뀌었을 수 있음)
           if (zone.serverId != null) {
             await ZoneSettingsStorage.save(
               zone.serverId!,
@@ -320,7 +401,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
         }
       }
 
-      // 3) 정리
       setState(() {
         _pendingDeleteIds.clear();
         _isSaving = false;
@@ -339,7 +419,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   // ─────────────────────────────────────────────
-  //   편집 동작
+  //   편집 동작 (기존과 동일)
   // ─────────────────────────────────────────────
   void _startNewZone() {
     setState(() {
@@ -364,9 +444,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       _showSnack('구역을 완성하려면 최소 3개의 점이 필요합니다.', isError: true);
       return;
     }
-    setState(() {
-      _activeZoneIndex = null;
-    });
+    setState(() => _activeZoneIndex = null);
   }
 
   void _undoLastPoint() {
@@ -387,7 +465,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       final removed = _zones.removeAt(index);
       if (removed.serverId != null) {
         _pendingDeleteIds.add(removed.serverId!);
-        // 로컬 설정도 즉시 정리
         ZoneSettingsStorage.remove(removed.serverId!);
       }
       if (_activeZoneIndex == index) {
@@ -409,32 +486,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       _zones.clear();
       _activeZoneIndex = null;
     });
-  }
-
-  // ─────────────────────────────────────────────
-  //   "최신 화면" → 안내만 표시 (정직한 미구현 안내)
-  // ─────────────────────────────────────────────
-  void _showSnapshotInfo() {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: const [
-            Icon(Icons.construction, color: Colors.white, size: 18),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                '실시간 스냅샷 갱신은 준비 중이에요. 위험구역 위치는 정상적으로 저장돼요.',
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.accent,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   void _showSnack(String message, {required bool isError}) {
@@ -505,7 +556,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                 ),
               ),
             ),
-
           Expanded(
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -524,14 +574,16 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                         if (mounted) setState(() => _canvasSize = newSize);
                       });
                     }
-                    return _buildCanvas(newSize, cameras.isNotEmpty);
+                    final activeCam = cameras.isNotEmpty
+                        ? cameras[_selectedCameraIndex.clamp(
+                            0, cameras.length - 1)]
+                        : null;
+                    return _buildCanvas(newSize, cameras.isNotEmpty, activeCam);
                   },
                 ),
               ),
             ),
           ),
-
-          // 하단 컨트롤
           Container(
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
@@ -554,13 +606,17 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 
-  Widget _buildCanvas(Size size, bool hasCameras) {
+  Widget _buildCanvas(Size size, bool hasCameras, CameraModel? activeCamera) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset('assets/images/1babyscreen.png', fit: BoxFit.cover),
+        // ── 배경 ──
+        _buildBackground(activeCamera),
+
+        // 어두운 오버레이 — 위험구역 색이 더 잘 보이게
         Container(color: Colors.black.withOpacity(0.35)),
 
+        // ── 위험구역 그리기 영역 ──
         GestureDetector(
           onTapDown: _isSaving || _isLoading
               ? null
@@ -599,25 +655,42 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
           ),
         ),
 
-        if (!_isSaving && !_isLoading && hasCameras)
+        // ── 상단 우측 배경 새로고침 버튼 ──
+        if (!_isSaving &&
+            !_isLoading &&
+            hasCameras &&
+            _bgMode == _BackgroundMode.cached)
           Positioned(
             top: AppSpacing.md,
             right: AppSpacing.md,
             child: _OverlayButton(
-              icon: Icons.info_outline,
-              label: '안내',
-              onTap: _showSnapshotInfo,
+              icon: Icons.refresh,
+              label: '배경 새로고침',
+              onTap: _refreshBackground,
             ),
           ),
 
-        if (_activeZoneIndex != null && !_isLoading)
+        // ── 라이브 캡처 중 배너 ──
+        if (_bgMode == _BackgroundMode.liveCapturing &&
+            hasCameras &&
+            !_isLoading)
           Positioned(
             top: AppSpacing.md,
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            child: _CapturingBanner(),
+          ),
+
+        // ── 점 개수 표시 ──
+        if (_activeZoneIndex != null && !_isLoading)
+          Positioned(
+            top: AppSpacing.md + 56,
             left: AppSpacing.md,
             child: _ActivePointsChip(
                 count: _zones[_activeZoneIndex!].points.length),
           ),
 
+        // ── 카메라 없음 ──
         if (!hasCameras && !_isLoading)
           const Center(
             child: EmptyStateView(
@@ -628,12 +701,43 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             ),
           ),
 
+        // ── 로딩/저장 오버레이 ──
         if (_isSaving || _isLoading)
-          _BlurOverlay(
-            message: _isSaving ? '저장 중...' : '불러오는 중...',
-          ),
+          _BlurOverlay(message: _isSaving ? '저장 중...' : '불러오는 중...'),
       ],
     );
+  }
+
+  /// 배경 모드별 위젯 분기
+  Widget _buildBackground(CameraModel? activeCamera) {
+    switch (_bgMode) {
+      case _BackgroundMode.cached:
+        if (_cachedSnapshot != null) {
+          return Image.file(
+            _cachedSnapshot!,
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+          );
+        }
+        return Container(color: Colors.black);
+
+      case _BackgroundMode.liveCapturing:
+        if (activeCamera == null || activeCamera.hlsUrl.isEmpty) {
+          return Container(color: Colors.black);
+        }
+        return RepaintBoundary(
+          key: _liveCaptureKey,
+          child: HlsPlayer(
+            key: ValueKey('zone-live-${activeCamera.id}'),
+            streamUrl: activeCamera.hlsUrl,
+            onConnected: _onLiveConnected,
+          ),
+        );
+
+      case _BackgroundMode.placeholder:
+        return Container(color: Colors.black);
+    }
   }
 
   Widget _buildBottomControls(List<dynamic> cameras) {
@@ -645,7 +749,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. 구역 이름 입력
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -677,8 +780,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-
-          // 2. 위험 수위 버튼
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -703,8 +804,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-
-          // 3. 객체 감지 토글
           Container(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
@@ -733,7 +832,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
                   value: activeZone.objectDetectionEnabled,
                   onChanged: (val) async {
                     setState(() => activeZone.objectDetectionEnabled = val);
-                    // 즉시 로컬에 영구 저장 (서버에 zone이 이미 저장된 경우만)
                     if (activeZone.serverId != null) {
                       await ZoneSettingsStorage.save(
                         activeZone.serverId!,
@@ -750,8 +848,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-
-          // 4. 액션 버튼
           Row(
             children: [
               Expanded(
@@ -783,7 +879,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       );
     }
 
-    // 기본 리스트 모드
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -845,7 +940,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
     );
   }
 
-  // 위험 수위 선택 버튼
   Widget _buildLevelBtn(
       int level, String text, Color color, _EditableZone zone) {
     final isSelected = zone.dangerLevel == level;
@@ -853,7 +947,6 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       child: GestureDetector(
         onTap: () async {
           setState(() => zone.dangerLevel = level);
-          // 즉시 로컬 저장 (서버에 zone이 있는 경우만)
           if (zone.serverId != null) {
             await ZoneSettingsStorage.save(
               zone.serverId!,
@@ -1029,6 +1122,62 @@ class _OverlayButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 라이브 캡처 중 안내 배너
+class _CapturingBanner extends StatelessWidget {
+  const _CapturingBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+            color: AppColors.accent.withOpacity(0.5), width: 0.5),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation(AppColors.accent),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm + 2),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '카메라 화면을 가져오는 중이에요',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 1),
+                Text(
+                  '잠시 후 이 화면 위에 위험구역을 그릴 수 있어요',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

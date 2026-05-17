@@ -89,11 +89,23 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
 void _startPolling() {
   _pollingTimer?.cancel();
+
+  // 폴링 시작 시점에 푸시 활성화 상태 동기화
+  _syncPushEnabled();
+
   _pollingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
     if (!mounted) return;
+    _syncPushEnabled(); // 매 폴링마다 최신 설정 반영
     context.read<LogProvider>().fetchAlerts();
     context.read<CameraProvider>().fetchCameras();
   });
+}
+
+/// SettingsProvider의 isAlertOn을 LogProvider에 전달
+void _syncPushEnabled() {
+  if (!mounted) return;
+  final alertOn = context.read<SettingsProvider>().isAlertOn;
+  context.read<LogProvider>().pushEnabled = alertOn;
 }
 
 void _stopPolling() {

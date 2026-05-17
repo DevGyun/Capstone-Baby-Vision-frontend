@@ -33,7 +33,15 @@
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="30" />
-
+<!--
+  사진 캡처를 갤러리(사진 앱)에 저장하기 위한 권한
+  - Android 13+ (SDK 33+): READ_MEDIA_IMAGES만 필요
+  - Android 9 이하: WRITE_EXTERNAL_STORAGE 필요 (gal 패키지가 자동 처리)
+-->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <!-- BLE 하드웨어 — 없는 기기에선 설치 안 됨 -->
     <uses-feature
         android:name="android.hardware.bluetooth_le"

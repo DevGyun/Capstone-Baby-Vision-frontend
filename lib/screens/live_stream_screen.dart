@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart'; // 추가된 임포트
 import '../theme/app_theme.dart';
 import '../widgets/hls_player.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
@@ -28,6 +32,12 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
   bool _isStreamConnected = false;
   int _retryCount = 0;
 
+  /// 캡처 처리 중 표시
+  bool _isCapturing = false;
+
+  /// 영상 영역만 캡처하기 위한 키
+  final GlobalKey _captureKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +51,104 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     _animationController.dispose();
     super.dispose();
   }
+/// 현재 영상 화면을 캡처해서 폰 갤러리에 저장.
+///
+/// 주의: video_player가 표시하는 영상은 별도 GPU 텍스처일 수 있어서
+/// 기기에 따라 영상 부분이 검은 화면으로 나올 수 있어요.
+/// 안드로이드 9+ 대부분의 기종에서 정상 동작.
+Future<void> _captureFrame() async {
+  if (_isCapturing) return;
+  if (!_isStreamConnected) {
+    _showSnack('영상이 연결된 뒤에 캡처할 수 있어요', isError: true);
+    return;
+  }
 
+  setState(() => _isCapturing = true);
+
+  try {
+    // 1) 갤러리 접근 권한 확인
+    final hasAccess = await Gal.hasAccess(toAlbum: true);
+    if (!hasAccess) {
+      final granted = await Gal.requestAccess(toAlbum: true);
+      if (!granted) {
+        if (mounted) {
+          _showSnack(
+            '갤러리 권한이 없어요. 앱 설정에서 사진 권한을 허용해 주세요',
+            isError: true,
+          );
+        }
+        return;
+      }
+    }
+
+    // 2) 영상 영역만 이미지로 추출
+    final boundary = _captureKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null) {
+      _showSnack('캡처를 준비하지 못했어요. 잠시 후 다시 시도해 주세요', isError: true);
+      return;
+    }
+
+    // 디바이스 픽셀 비율 반영 — 고해상도로 저장
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final image = await boundary.toImage(pixelRatio: dpr);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      _showSnack('이미지 변환에 실패했어요', isError: true);
+      return;
+    }
+    final pngBytes = byteData.buffer.asUint8List();
+
+    // 3) 갤러리에 저장
+    final now = DateTime.now();
+    final fileName =
+        'EyeCatch_${widget.cameraName.replaceAll(RegExp(r"\s+"), "_")}_'
+        '${now.year}${now.month.toString().padLeft(2, "0")}${now.day.toString().padLeft(2, "0")}_'
+        '${now.hour.toString().padLeft(2, "0")}${now.minute.toString().padLeft(2, "0")}${now.second.toString().padLeft(2, "0")}';
+
+    await Gal.putImageBytes(
+      pngBytes,
+      album: 'EyeCatch',
+      name: fileName,
+    );
+
+    if (mounted) {
+      _showSnack('갤러리에 저장됐어요 · EyeCatch 앨범', isError: false);
+    }
+  } on GalException catch (e) {
+    if (mounted) {
+      _showSnack('저장 실패: ${e.type.message}', isError: true);
+    }
+  } catch (e) {
+    if (mounted) {
+      _showSnack('캡처 중 오류가 발생했어요', isError: true);
+    }
+  } finally {
+    if (mounted) setState(() => _isCapturing = false);
+  }
+}
+
+/// 성공/실패 메시지를 일관된 모양으로 표시
+void _showSnack(String message, {required bool isError}) {
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          Icon(
+            isError ? Icons.error_outline : Icons.check_circle_outline,
+            color: isError ? AppColors.danger : AppColors.success,
+            size: 18,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message)),
+        ],
+      ),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 2),
+    ),
+  );
+}
   /// 미구현 기능 안내 — 거짓말하지 않고 정직하게.
   void _showComingSoon(String featureName) {
     ScaffoldMessenger.of(context).clearSnackBars();
@@ -69,22 +176,26 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
         child: Stack(
           children: [
             // 1. 영상 플레이어
-            Positioned.fill(
-              child: HlsPlayer(
-                streamUrl: widget.streamUrl,
-                onConnected: () {
-                  if (mounted && !_isStreamConnected) {
-                    setState(() {
-                      _isStreamConnected = true;
-                      _retryCount = 0;
-                    });
-                  }
-                },
-                onRetry: () {
-                  if (mounted) setState(() => _retryCount++);
-                },
-              ),
-            ),
+            // 1. 영상 플레이어 (캡처를 위해 RepaintBoundary로 감싸기)
+Positioned.fill(
+  child: RepaintBoundary(
+    key: _captureKey,
+    child: HlsPlayer(
+      streamUrl: widget.streamUrl,
+      onConnected: () {
+        if (mounted && !_isStreamConnected) {
+          setState(() {
+            _isStreamConnected = true;
+            _retryCount = 0;
+          });
+        }
+      },
+      onRetry: () {
+        if (mounted) setState(() => _retryCount++);
+      },
+    ),
+  ),
+),
 
             // 2. 상단 바 (글래스모피즘) - PointerInterceptor 적용
             Positioned(
@@ -177,20 +288,25 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
                       decoration:
                           BoxDecoration(color: Colors.black.withOpacity(0.5)),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildComingSoonBtn(
-                            icon: Icons.camera_alt_outlined,
-                            label: '캡처',
-                            onTap: () => _showComingSoon('캡처'),
-                          ),
-                          _buildComingSoonBtn(
-                            icon: Icons.fiber_manual_record,
-                            label: '녹화',
-                            onTap: () => _showComingSoon('녹화'),
-                          ),
-                        ],
-                      ),
+  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  children: [
+    // 캡처 — 활성화됨!
+    _buildActiveControlBtn(
+      icon: _isCapturing
+          ? Icons.hourglass_top
+          : Icons.camera_alt_outlined,
+      label: _isCapturing ? '저장 중...' : '캡처',
+      onTap: _isCapturing ? null : _captureFrame,
+      isProcessing: _isCapturing,
+    ),
+    // 녹화 — 아직 준비 중
+    _buildComingSoonBtn(
+      icon: Icons.fiber_manual_record,
+      label: '녹화',
+      onTap: () => _showComingSoon('녹화'),
+    ),
+  ],
+),
                     ),
                   ),
                 ),
@@ -262,7 +378,58 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
       ),
     );
   }
+/// 활성화된 컨트롤 버튼.
+/// 캡처처럼 실제로 동작하는 기능에 사용.
+Widget _buildActiveControlBtn({
+  required IconData icon,
+  required String label,
+  required VoidCallback? onTap,
+  bool isProcessing = false,
+}) {
+  final enabled = onTap != null;
 
+  return InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(AppRadius.md),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isProcessing)
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation(Colors.white),
+              ),
+            )
+          else
+            Icon(
+              icon,
+              color: enabled
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.4),
+              size: 28,
+            ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: enabled
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.4),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   /// 준비 중 표시가 명확한 버튼.
   /// 시각적으로 비활성 상태처럼 보이지만 탭하면 안내가 떠요.
   Widget _buildComingSoonBtn({

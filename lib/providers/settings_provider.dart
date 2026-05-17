@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 import '../services/api_client.dart';
+import '../services/alert_seen_storage.dart';
 
 class SettingsProvider extends ChangeNotifier {
   String _profileName = '보호자';
@@ -51,8 +52,11 @@ Future<void> logout(Function onSuccess) async {
   await prefs.remove('eyeCatchToken');
   await prefs.remove('eyeCatchRefreshToken');
   await prefs.remove('eyeCatchUser');
-  // 자동 로그인 플래그도 끔 — 사용자가 명시적으로 로그아웃했으니까
   await prefs.setBool('autoLoginEnabled', false);
+
+  // 다른 계정 알림 ID와 충돌 안 나도록 푸시 추적도 정리
+  await AlertSeenStorage.clear();
+
   onSuccess();
 }
 /// 회원 탈퇴 (DELETE /users/me).
