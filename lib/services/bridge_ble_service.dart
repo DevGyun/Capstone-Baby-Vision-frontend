@@ -126,18 +126,20 @@ class BridgeBleService {
 
         _scanSub = FlutterBluePlus.scanResults.listen((results) {
           for (final r in results) {
-            // 광고 이름이 "EyeCatch-"로 시작하는 것만 필터.
-            // Service UUID 필터를 쓰면 더 정확하지만 광고에 ServiceUUID가
-            // 안 실릴 수도 있어서 이름 기반 폴백을 함께 사용.
-            final n = r.device.platformName;
-            if (n.startsWith(BleContract.advertisingNamePrefix)) {
-              found[r.device.remoteId.str] = DiscoveredBridge(
-                name: n,
-                deviceId: r.device.remoteId.str,
-                rssi: r.rssi,
-                device: r.device,
-              );
-            }
+            // platformName은 페어링 후 캐시된 이름이 잡힐 수도 있으니
+// advertisementData.advName을 우선 사용 (없으면 platformName 폴백)
+String n = r.advertisementData.advName;
+if (n.isEmpty) n = r.device.platformName;
+
+final prefixLower = BleContract.advertisingNamePrefix.toLowerCase();
+if (n.toLowerCase().startsWith(prefixLower)) {
+  found[r.device.remoteId.str] = DiscoveredBridge(
+    name: n,
+    deviceId: r.device.remoteId.str,
+    rssi: r.rssi,
+    device: r.device,
+  );
+}
           }
           final list = found.values.toList()
             ..sort((a, b) => b.rssi.compareTo(a.rssi)); // 가까운 순
@@ -191,7 +193,7 @@ class BridgeBleService {
     required String ssid,
     required String password,
     required String cameraName,
-    Duration totalTimeout = const Duration(seconds: 60),
+    Duration totalTimeout = const Duration(seconds: 90),
     void Function(BlePairingPhase)? onPhase,
   }) async {
     onPhase?.call(BlePairingPhase.connecting);
@@ -313,11 +315,13 @@ class BridgeBleService {
 
       // 6) 전체 타임아웃 — 브릿지가 wifi 연결 + 서버 register까지 마칠 시간
       timeoutTimer = Timer(totalTimeout, () {
-        finish(BlePairingResult.failure(
-          '카메라 응답이 너무 늦어요. Wi-Fi 신호가 약하거나 서버에 연결하지 못했을 수 있어요',
-        ));
-      });
-
+  finish(BlePairingResult.failure(
+    '카메라 응답이 너무 늦어요.\n\n'
+    '• Wi-Fi 비밀번호가 맞는지 확인해 주세요\n'
+    '• 카메라가 공유기 가까이 있는지 확인해 주세요\n'
+    '• 카메라를 다시 켠 뒤 처음부터 시도해 주세요',
+  ));
+});
       final result = await completer.future;
       await cleanup();
       return result;
