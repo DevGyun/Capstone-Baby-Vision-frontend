@@ -75,7 +75,7 @@ Future<bool> _hasValidSession() async {
     return true;
   } catch (e) {
     // 네트워크 단절 등 — 오프라인일 수도 있으니 사용자 강제 로그아웃 X
-    print('세션 검증 중 네트워크 에러: $e');
+    debugPrint('세션 검증 중 네트워크 에러: $e');
     return true;
   }
 }
@@ -105,7 +105,7 @@ Future<bool> _tryRefresh() async {
       return true;
     }
   } catch (e) {
-    print('Refresh 토큰 검증 에러: $e');
+    debugPrint('Refresh 토큰 검증 에러: $e');
   }
 
   // refresh도 실패 → 깔끔하게 정리

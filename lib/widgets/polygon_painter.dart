@@ -25,7 +25,7 @@ class PolygonEditorPainter extends CustomPainter {
     Color? fillColor,
   })  : strokeColor = strokeColor ?? AppColors.warning,
         fillColor = fillColor ??
-            AppColors.warning.withOpacity(isCompleted ? 0.20 : 0.10);
+            AppColors.warning.withValues(alpha:isCompleted ? 0.20 : 0.10);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -128,7 +128,7 @@ class PolygonEditorPainter extends CustomPainter {
     const dashLen = 6.0;
     const gapLen = 4.0;
     final paint = Paint()
-      ..color = color.withOpacity(0.5)
+      ..color = color.withValues(alpha:0.5)
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
     final total = (b - a).distance;

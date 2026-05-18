@@ -81,10 +81,10 @@ Future<void> fetchAlerts() async {
 
       _logs = newLogs;
     } else {
-      print('알림 목록 실패: ${response.statusCode}');
+      debugPrint('알림 목록 실패: ${response.statusCode}');
     }
   } catch (e) {
-    print('알림 목록 에러: $e');
+    debugPrint('알림 목록 에러: $e');
   } finally {
     _isLoading = false;
     notifyListeners();
@@ -153,7 +153,7 @@ Future<void> _maybePushNewAlerts(List<IncidentLog> latestLogs) async {
         await fetchAlerts();
       }
     } catch (e) {
-      print('읽음 처리 에러: $e');
+      debugPrint('읽음 처리 에러: $e');
     }
   }
   /// 로그아웃 시 호출 — 푸시 추적 상태 초기화

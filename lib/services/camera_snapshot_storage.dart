@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 /// 추후 백엔드에 GET /cameras/{id}/snapshot API가 생기면
 /// 이 클래스를 제거하고 서버로 옮기면 됨.
 ///
-/// 저장 위치: <앱 문서 디렉토리>/snapshots/camera_<id>.png
+/// 저장 위치: `<앱 문서 디렉토리>/snapshots/camera_<id>.png`
 class CameraSnapshotStorage {
   static const String _folder = 'snapshots';
 

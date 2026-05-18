@@ -147,7 +147,7 @@ class _SoftButtonState extends State<SoftButton> {
           foreground: cs.onPrimary,
           border: null,
           disabledBackground: cs.surfaceContainerHigh,
-          disabledForeground: cs.onSurfaceVariant.withOpacity(0.5),
+          disabledForeground: cs.onSurfaceVariant.withValues(alpha:0.5),
           disabledBorder: null,
         );
       case SoftButtonVariant.secondary:
@@ -156,7 +156,7 @@ class _SoftButtonState extends State<SoftButton> {
           foreground: cs.onSurface,
           border: cs.outline,
           disabledBackground: Colors.transparent,
-          disabledForeground: cs.onSurfaceVariant.withOpacity(0.4),
+          disabledForeground: cs.onSurfaceVariant.withValues(alpha:0.4),
           disabledBorder: cs.outlineVariant,
         );
       case SoftButtonVariant.tonal:
@@ -165,17 +165,17 @@ class _SoftButtonState extends State<SoftButton> {
           foreground: cs.onSurface,
           border: null,
           disabledBackground: cs.surfaceContainer,
-          disabledForeground: cs.onSurfaceVariant.withOpacity(0.5),
+          disabledForeground: cs.onSurfaceVariant.withValues(alpha:0.5),
           disabledBorder: null,
         );
       case SoftButtonVariant.danger:
         return _ButtonStyle(
-          background: AppColors.danger.withOpacity(
+          background: AppColors.danger.withValues(alpha:
               Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.10),
           foreground: AppColors.danger,
-          border: AppColors.danger.withOpacity(0.3),
+          border: AppColors.danger.withValues(alpha:0.3),
           disabledBackground: cs.surfaceContainerHigh,
-          disabledForeground: cs.onSurfaceVariant.withOpacity(0.5),
+          disabledForeground: cs.onSurfaceVariant.withValues(alpha:0.5),
           disabledBorder: cs.outlineVariant,
         );
     }

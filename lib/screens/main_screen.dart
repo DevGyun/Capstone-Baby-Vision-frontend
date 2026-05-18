@@ -177,7 +177,7 @@ void _onItemTapped(int index) => setState(() => _selectedIndex = index);
                     height: 48,
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: AppColors.danger.withOpacity(0.12),
+                      color: AppColors.danger.withValues(alpha:0.12),
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
@@ -221,26 +221,27 @@ void _onItemTapped(int index) => setState(() => _selectedIndex = index);
                         icon: Icons.delete_outline,
                         variant: SoftButtonVariant.danger,
                         onPressed: () async {
-                          Navigator.pop(childContext);
-                          final success = await context
-                              .read<CameraProvider>()
-                              .removeCamera(cameraId);
-                          if (!mounted) return;
-                          if (success) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('카메라가 제거되었어요'),
-                              ),
-                            );
-                            setState(() => _selectedCameraIndex = 0);
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('제거에 실패했어요. 다시 시도해 주세요'),
-                              ),
-                            );
-                          }
-                        },
+  final messenger = ScaffoldMessenger.of(context);
+  Navigator.pop(childContext);
+  final success = await context
+      .read<CameraProvider>()
+      .removeCamera(cameraId);
+  if (!mounted) return;
+  if (success) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('카메라가 제거되었어요'),
+      ),
+    );
+    setState(() => _selectedCameraIndex = 0);
+  } else {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('제거에 실패했어요. 다시 시도해 주세요'),
+      ),
+    );
+  }
+},
                       ),
                     ),
                   ],
@@ -322,8 +323,10 @@ Widget build(BuildContext context) {
       child: RefreshIndicator(
         color: AppColors.accent,
         onRefresh: () async {
-          await context.read<CameraProvider>().fetchCameras();
-          await context.read<LogProvider>().fetchAlerts();
+          final cameraProvider = context.read<CameraProvider>();
+          final logProvider = context.read<LogProvider>();
+          await cameraProvider.fetchCameras();
+          await logProvider.fetchAlerts();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -383,7 +386,7 @@ Widget build(BuildContext context) {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.accent.withOpacity(0.06),
+                              color: AppColors.accent.withValues(alpha:0.06),
                               blurRadius: 30,
                               offset: const Offset(0, 8),
                             ),
@@ -713,7 +716,7 @@ Widget build(BuildContext context) {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.55),
+                      color: Colors.black.withValues(alpha:0.55),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                     child: Row(
@@ -750,7 +753,7 @@ Widget build(BuildContext context) {
                         end: Alignment.bottomCenter,
                         colors: [
                           Colors.transparent,
-                          Colors.black.withOpacity(0.7),
+                          Colors.black.withValues(alpha:0.7),
                         ],
                       ),
                     ),
@@ -793,7 +796,7 @@ Widget build(BuildContext context) {
                                   ? Icons.visibility_outlined
                                   : Icons.visibility_off_outlined,
                               color: cam.isActive
-                                  ? Colors.white.withOpacity(0.85)
+                                  ? Colors.white.withValues(alpha:0.85)
                                   : AppColors.warning,
                               size: 18,
                             ),
@@ -807,7 +810,7 @@ Widget build(BuildContext context) {
                             padding: const EdgeInsets.all(8),
                             child: Icon(
                               Icons.delete_outline_rounded,
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withValues(alpha:0.85),
                               size: 18,
                             ),
                           ),
@@ -876,7 +879,7 @@ Widget build(BuildContext context) {
                 foregroundDecoration: BoxDecoration(
                   color: isActive
                       ? Colors.transparent
-                      : Colors.black.withOpacity(0.45),
+                      : Colors.black.withValues(alpha:0.45),
                 ),
                 child: Image.asset(
                   'assets/images/1babyscreen.png',
@@ -928,7 +931,7 @@ Widget build(BuildContext context) {
           color: AppColors.accentSoft(context),
           borderRadius: BorderRadius.circular(AppRadius.md - 2),
           border: Border.all(
-            color: AppColors.accent.withOpacity(0.4),
+            color: AppColors.accent.withValues(alpha:0.4),
             width: 1,
           ),
         ),
@@ -1100,7 +1103,7 @@ Widget build(BuildContext context) {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: log.iconColor.withOpacity(isDark ? 0.18 : 0.12),
+                  color: log.iconColor.withValues(alpha:isDark ? 0.18 : 0.12),
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 alignment: Alignment.center,
@@ -1139,7 +1142,7 @@ Widget build(BuildContext context) {
                       log.description,
                       style: TextStyle(
                         fontSize: 13,
-                        color: cs.onSurface.withOpacity(0.8),
+                        color: cs.onSurface.withValues(alpha:0.8),
                         height: 1.4,
                       ),
                       maxLines: 1,
@@ -1178,16 +1181,16 @@ Widget build(BuildContext context) {
           height: 70,
           decoration: BoxDecoration(
             color: isDark
-                ? cs.surfaceContainer.withOpacity(0.85)
-                : cs.surfaceContainerLow.withOpacity(0.85),
+                ? cs.surfaceContainer.withValues(alpha:0.85)
+                : cs.surfaceContainerLow.withValues(alpha:0.85),
             borderRadius: BorderRadius.circular(AppRadius.lg + 6),
             border: Border.all(
-              color: cs.outlineVariant.withOpacity(0.5),
+              color: cs.outlineVariant.withValues(alpha:0.5),
               width: 0.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.4 : 0.08),
+                color: Colors.black.withValues(alpha:isDark ? 0.4 : 0.08),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -1267,7 +1270,7 @@ Widget build(BuildContext context) {
             borderRadius: BorderRadius.circular(AppRadius.md),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accent.withOpacity(0.35),
+                color: AppColors.accent.withValues(alpha:0.35),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

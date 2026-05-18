@@ -60,7 +60,7 @@ class AuthProvider extends ChangeNotifier {
         onError(errorData['detail'] ?? '이메일 또는 비밀번호가 틀렸습니다.');
       }
     } catch (e) {
-      print('로그인 통신 에러: $e');
+      debugPrint('로그인 통신 에러: $e');
       onError('서버와 통신할 수 없습니다.\n인터넷 연결이나 서버 상태를 확인해주세요.');
     } finally {
       _isLoading = false;

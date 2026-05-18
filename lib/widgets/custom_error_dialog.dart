@@ -57,7 +57,7 @@ class CustomErrorDialog extends StatelessWidget {
                 height: 48,
                 margin: const EdgeInsets.only(bottom: AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.danger.withOpacity(0.12),
+                  color: AppColors.danger.withValues(alpha:0.12),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,

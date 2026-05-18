@@ -350,7 +350,7 @@ class SettingsScreen extends StatelessWidget {
             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
         secondary: CircleAvatar(
           backgroundColor: value
-              ? AppColors.accent.withOpacity(0.1)
+              ? AppColors.accent.withValues(alpha:0.1)
               : cs.surfaceContainerHighest,
           child: Icon(icon,
               color: value ? AppColors.accent : cs.onSurfaceVariant,
@@ -358,7 +358,7 @@ class SettingsScreen extends StatelessWidget {
         ),
         value: value,
         onChanged: onChanged,
-        activeColor: AppColors.accent,
+        activeThumbColor: AppColors.accent,
       ),
     );
   }
@@ -402,7 +402,7 @@ Widget _buildThemeTile(
               style:
                   TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           leading: CircleAvatar(
-            backgroundColor: AppColors.accent.withOpacity(0.1),
+            backgroundColor: AppColors.accent.withValues(alpha:0.1),
             child: Icon(currentIcon, color: AppColors.accent, size: 20),
           ),
         ),
@@ -460,7 +460,7 @@ Widget _buildThemeOption(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.accent.withOpacity(0.1)
+              ? AppColors.accent.withValues(alpha:0.1)
               : cs.surfaceContainerLowest,
           border: Border.all(
             color: isSelected ? AppColors.accent : cs.outlineVariant,
@@ -530,15 +530,16 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
             .showSnackBar(SnackBar(content: Text(errorMsg))),
       );
 
-      if (isSuccess && context.mounted) {
-        // ✨ 핵심: 저장 후 SharedPreferences 다시 읽어서 일관성 보장
-        await settings.loadSettings();
-        if (!mounted) return;
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('정보가 성공적으로 수정되었습니다.')),
-        );
-      }
+     if (isSuccess && context.mounted) {
+      final navigator = Navigator.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      await settings.loadSettings();
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('정보가 성공적으로 수정되었습니다.')),
+      );
+    }
     }
 
     return Scaffold(

@@ -133,10 +133,10 @@ class CameraProvider with ChangeNotifier {
           _lastErrorMessage = detail ?? '페어링에 실패했어요. (${response.statusCode})';
       }
 
-      print('페어링 실패: ${response.statusCode} ${response.body}');
+      debugPrint('페어링 실패: ${response.statusCode} ${response.body}');
       return false;
     } catch (e) {
-      print('페어링 에러: $e');
+      debugPrint('페어링 에러: $e');
       _lastErrorMessage = '서버와 통신할 수 없어요. 인터넷 연결을 확인해 주세요.';
       return false;
     } finally {
@@ -155,10 +155,10 @@ class CameraProvider with ChangeNotifier {
         final List<dynamic> data = json.decode(response.body);
         _cameras = data.map((e) => CameraModel.fromJson(e)).toList();
       } else {
-        print('카메라 목록 불러오기 실패: ${response.statusCode}');
+        debugPrint('카메라 목록 불러오기 실패: ${response.statusCode}');
       }
     } catch (e) {
-      print('카메라 목록 에러: $e');
+      debugPrint('카메라 목록 에러: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -177,10 +177,10 @@ class CameraProvider with ChangeNotifier {
       await CameraSnapshotStorage.remove(cameraId);
       return true;
     }
-      print('카메라 삭제 실패: ${response.statusCode}');
+      debugPrint('카메라 삭제 실패: ${response.statusCode}');
       return false;
     } catch (e) {
-      print('카메라 삭제 에러: $e');
+      debugPrint('카메라 삭제 에러: $e');
       _cameras.removeWhere((c) => c.id == cameraId);
       return true;
     } finally {
@@ -218,12 +218,12 @@ class CameraProvider with ChangeNotifier {
 
       _cameras[idx] = original;
       notifyListeners();
-      print('카메라 활성 토글 실패: ${response.statusCode} ${response.body}');
+      debugPrint('카메라 활성 토글 실패: ${response.statusCode} ${response.body}');
       return false;
     } catch (e) {
       _cameras[idx] = original;
       notifyListeners();
-      print('카메라 활성 토글 에러: $e');
+      debugPrint('카메라 활성 토글 에러: $e');
       return false;
     }
   }

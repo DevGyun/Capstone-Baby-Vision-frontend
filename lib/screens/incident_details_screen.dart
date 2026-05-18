@@ -54,7 +54,7 @@ class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
                     width: double.infinity,
                     height: 220,
                     fit: BoxFit.cover,
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha:0.2),
                     colorBlendMode: BlendMode.darken,
                   ),
                 ),
@@ -73,14 +73,14 @@ class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Theme.of(context).shadowColor.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Theme.of(context).shadowColor.withValues(alpha:0.05), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: log.iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                    decoration: BoxDecoration(color: log.iconColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(16)),
                     child: Text(
                       log.isAlert ? '알림: 주의 필요' : '일반 시스템 기록',
                       style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold),

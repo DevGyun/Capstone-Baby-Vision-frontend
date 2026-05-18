@@ -643,7 +643,7 @@ class _BridgeTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
+            color: Colors.white.withValues(alpha:0.06),
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: Colors.white24, width: 0.5),
           ),
@@ -653,7 +653,7 @@ class _BridgeTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.18),
+                  color: AppColors.accent.withValues(alpha:0.18),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,

@@ -166,10 +166,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     margin: const EdgeInsets.all(40), // 일러스트보다 약간 작게 마진
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: blobColor.withOpacity(0.15),
+                      color: blobColor.withValues(alpha:0.15),
                       boxShadow: [
                         BoxShadow(
-                          color: blobColor.withOpacity(0.2),
+                          color: blobColor.withValues(alpha:0.2),
                           blurRadius: 60,
                           spreadRadius: 20,
                         )
@@ -188,7 +188,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     errorBuilder: (context, error, stackTrace) => Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(fallbackIcon, size: 80, color: blobColor.withOpacity(0.7)),
+                        Icon(fallbackIcon, size: 80, color: blobColor.withValues(alpha:0.7)),
                         const SizedBox(height: AppSpacing.md),
                         Text('이미지 파일 필요\n($imagePath)', textAlign: TextAlign.center, style: TextStyle(color: cs.outline, fontSize: 12)),
                       ],

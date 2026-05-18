@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -285,7 +284,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
         _captureScheduled = false;
       });
     } catch (e) {
-      print('배경 캡처 실패: $e');
+      debugPrint('배경 캡처 실패: $e');
       if (mounted) {
         setState(() {
           _bgMode = _BackgroundMode.placeholder;
@@ -592,7 +591,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
                   top: Radius.circular(AppRadius.lg)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha:0.05),
                   blurRadius: 20,
                   offset: const Offset(0, -5),
                 ),
@@ -614,7 +613,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
         _buildBackground(activeCamera),
 
         // 어두운 오버레이 — 위험구역 색이 더 잘 보이게
-        Container(color: Colors.black.withOpacity(0.35)),
+        Container(color: Colors.black.withValues(alpha:0.35)),
 
         // ── 위험구역 그리기 영역 ──
         GestureDetector(
@@ -842,7 +841,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
                       );
                     }
                   },
-                  activeColor: AppColors.accent,
+                  activeThumbColor: AppColors.accent,
                 ),
               ],
             ),
@@ -961,7 +960,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: isSelected
-                ? color.withOpacity(0.1)
+                ? color.withValues(alpha:0.1)
                 : Theme.of(context).colorScheme.surfaceContainerLowest,
             border: Border.all(
               color: isSelected
@@ -1102,7 +1101,7 @@ class _OverlayButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha:0.5),
             borderRadius: BorderRadius.circular(AppRadius.sm),
             border: Border.all(color: Colors.white24, width: 0.5),
           ),
@@ -1137,10 +1136,10 @@ class _CapturingBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withValues(alpha:0.7),
         borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(
-            color: AppColors.accent.withOpacity(0.5), width: 0.5),
+            color: AppColors.accent.withValues(alpha:0.5), width: 0.5),
       ),
       child: Row(
         children: [
@@ -1238,7 +1237,7 @@ class _ZoneEditChip extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(isDark ? 0.16 : 0.10),
+        color: AppColors.warning.withValues(alpha:isDark ? 0.16 : 0.10),
         borderRadius: BorderRadius.circular(AppRadius.sm + 2),
       ),
       child: Row(
@@ -1275,7 +1274,7 @@ class _ZoneEditChip extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: AppColors.warning.withOpacity(0.7),
+                      color: AppColors.warning.withValues(alpha:0.7),
                     ),
                   ),
                 ],
@@ -1310,7 +1309,7 @@ class _BlurOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withValues(alpha:0.7),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

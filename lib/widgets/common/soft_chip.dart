@@ -83,28 +83,28 @@ class SoftChip extends StatelessWidget {
         );
       case SoftChipTone.accent:
         return _ChipColors(
-          background: AppColors.accent.withOpacity(isDark ? 0.18 : 0.12),
+          background: AppColors.accent.withValues(alpha:isDark ? 0.18 : 0.12),
           foreground: AppColors.accent,
         );
       case SoftChipTone.success:
         return _ChipColors(
-          background: AppColors.success.withOpacity(isDark ? 0.16 : 0.10),
+          background: AppColors.success.withValues(alpha:isDark ? 0.16 : 0.10),
           foreground: AppColors.success,
         );
       case SoftChipTone.warning:
         return _ChipColors(
-          background: AppColors.warning.withOpacity(isDark ? 0.16 : 0.10),
+          background: AppColors.warning.withValues(alpha:isDark ? 0.16 : 0.10),
           foreground: AppColors.warning,
         );
       case SoftChipTone.danger:
         return _ChipColors(
-          background: AppColors.danger.withOpacity(isDark ? 0.16 : 0.10),
+          background: AppColors.danger.withValues(alpha:isDark ? 0.16 : 0.10),
           foreground: AppColors.danger,
         );
       case SoftChipTone.dark:
         // 영상 위에 얹는 칩 (LIVE 등) — 영상이 밝든 어둡든 잘 보이게
         return _ChipColors(
-          background: Colors.black.withOpacity(0.55),
+          background: Colors.black.withValues(alpha:0.55),
           foreground: Colors.white,
         );
     }
@@ -165,7 +165,7 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: widget.color.withOpacity(_controller.value * 0.6),
+                color: widget.color.withValues(alpha:_controller.value * 0.6),
                 blurRadius: 6,
                 spreadRadius: 1,
               ),

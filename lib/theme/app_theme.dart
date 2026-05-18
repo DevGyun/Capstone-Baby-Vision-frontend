@@ -148,7 +148,7 @@ class AppTheme {
           fontWeight: FontWeight.w400,
         ),
         hintStyle: TextStyle(
-          color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+          color: colorScheme.onSurfaceVariant.withValues(alpha:0.5),
           fontSize: 14,
         ),
         border: OutlineInputBorder(
@@ -208,8 +208,8 @@ class AppTheme {
       ),
 
       splashFactory: InkRipple.splashFactory,
-      splashColor: colorScheme.primary.withOpacity(0.08),
-      highlightColor: colorScheme.primary.withOpacity(0.04),
+      splashColor: colorScheme.primary.withValues(alpha:0.08),
+      highlightColor: colorScheme.primary.withValues(alpha:0.04),
     );
   }
 
@@ -306,13 +306,13 @@ class AppColors {
   static const Color info = Color(0xFF0064FF); 
 
   static Color successSoft(BuildContext context) =>
-      success.withOpacity(_isDark(context) ? 0.15 : 0.10);
+      success.withValues(alpha:_isDark(context) ? 0.15 : 0.10);
   static Color warningSoft(BuildContext context) =>
-      warning.withOpacity(_isDark(context) ? 0.15 : 0.10);
+      warning.withValues(alpha:_isDark(context) ? 0.15 : 0.10);
   static Color dangerSoft(BuildContext context) =>
-      danger.withOpacity(_isDark(context) ? 0.15 : 0.10);
+      danger.withValues(alpha:_isDark(context) ? 0.15 : 0.10);
   static Color accentSoft(BuildContext context) =>
-      accent.withOpacity(_isDark(context) ? 0.15 : 0.10);
+      accent.withValues(alpha:_isDark(context) ? 0.15 : 0.10);
 
   static bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
@@ -345,7 +345,7 @@ class AppShadows {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
       BoxShadow(
-        color: AppColors.accent.withOpacity(isDark ? 0.0 : 0.04), // 파란빛이 아주 살짝 도는 그림자
+        color: AppColors.accent.withValues(alpha:isDark ? 0.0 : 0.04), // 파란빛이 아주 살짝 도는 그림자
         blurRadius: 20,
         offset: const Offset(0, 4),
       ),
@@ -356,7 +356,7 @@ class AppShadows {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return [
       BoxShadow(
-        color: AppColors.accent.withOpacity(isDark ? 0.2 : 0.08),
+        color: AppColors.accent.withValues(alpha:isDark ? 0.2 : 0.08),
         blurRadius: 24,
         offset: const Offset(0, 8),
       ),
@@ -365,7 +365,7 @@ class AppShadows {
 
   static List<BoxShadow> accentGlow() => [
         BoxShadow(
-          color: AppColors.accent.withOpacity(0.3),
+          color: AppColors.accent.withValues(alpha:0.3),
           blurRadius: 16,
           spreadRadius: 0,
         ),

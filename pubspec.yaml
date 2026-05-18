@@ -32,3 +32,5 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/images/eyeCatchicon.png"
+dev_dependencies:
+  flutter_lints: ^6.0.0

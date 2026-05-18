@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter/foundation.dart';
 
 /// ─────────────────────────────────────────────────────────────────
 ///   BLE 컨트랙트 (브릿지 담당자와 합의 필요)
@@ -28,7 +29,7 @@ class BleContract {
 
   /// 브릿지→앱: 상태 알림 (Notify, plain text)
   ///   "wifi_connecting" | "wifi_ok" | "wifi_failed"
-  ///   "registering" | "error:<reason>"
+  ///   "registering" | "error:`<reason>`"
   static const String statusCharUuid =
       '0000ec02-0000-1000-8000-00805f9b34fb';
 
@@ -222,24 +223,24 @@ if (n.toLowerCase().startsWith(prefixLower)) {
 
     try {
       // 1) 연결
-      print('[BLE][v3] connect 시작');
+      debugPrint('[BLE][v3] connect 시작');
       await device.connect(
         timeout: const Duration(seconds: 12),
         autoConnect: false,
       );
-      print('[BLE][v3] connect 성공, isConnected=${device.isConnected}');
+      debugPrint('[BLE][v3] connect 성공, isConnected=${device.isConnected}');
       _connectedDevice = device;
 
       // 연결 직후 안드로이드 블루투스 스택 안정을 위해 2초 대기
       await Future.delayed(const Duration(seconds: 2));
-      print('[BLE][v3] 2초 대기 완료, isConnected=${device.isConnected}');
+      debugPrint('[BLE][v3] 2초 대기 완료, isConnected=${device.isConnected}');
 
       // 2) 서비스/특성 검색
-      print('[BLE][v3] discoverServices 시작');
+      debugPrint('[BLE][v3] discoverServices 시작');
       final services = await device.discoverServices();
-      print('[BLE][v3] 발견된 서비스 ${services.length}개:');
+      debugPrint('[BLE][v3] 발견된 서비스 ${services.length}개:');
       for (final s in services) {
-        print('[BLE][v3]   ${s.uuid}');
+        debugPrint('[BLE][v3]   ${s.uuid}');
       }
       BluetoothService? svc;
       for (final s in services) {
@@ -358,7 +359,7 @@ if (n.toLowerCase().startsWith(prefixLower)) {
 
   String _humanizeBleError(Object e) {
     final s = e.toString();
-    print('[BLE ERROR] $s');
+    debugPrint('[BLE ERROR] $s');
     if (s.contains('timeout')) return '카메라 연결 시간이 초과됐어요';
     if (s.contains('disconnected')) return '카메라와의 연결이 끊겼어요';
     if (s.contains('not supported')) return '이 기기는 BLE를 지원하지 않아요';

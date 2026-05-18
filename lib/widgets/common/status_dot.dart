@@ -64,7 +64,7 @@ class _StatusDotState extends State<StatusDot>
       case StatusDotKind.online:
         return AppColors.success;
       case StatusDotKind.offline:
-        return Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6);
+        return Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha:0.6);
       case StatusDotKind.warning:
         return AppColors.warning;
       case StatusDotKind.alert:
@@ -98,7 +98,7 @@ class _StatusDotState extends State<StatusDot>
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: color.withOpacity(_controller.value * 0.5),
+                color: color.withValues(alpha:_controller.value * 0.5),
                 blurRadius: 8,
                 spreadRadius: 1.5,
               ),

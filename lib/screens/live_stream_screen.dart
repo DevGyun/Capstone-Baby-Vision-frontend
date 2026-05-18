@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart'; // 추가된 임포트
 import '../theme/app_theme.dart';
 import '../widgets/hls_player.dart';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:gal/gal.dart';
@@ -90,6 +89,8 @@ Future<void> _captureFrame() async {
     }
 
     // 디바이스 픽셀 비율 반영 — 고해상도로 저장
+// 디바이스 픽셀 비율 반영 — 고해상도로 저장
+    if (!mounted) return;
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final image = await boundary.toImage(pixelRatio: dpr);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -211,7 +212,7 @@ Positioned.fill(
                       padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
                       decoration:
-                          BoxDecoration(color: Colors.black.withOpacity(0.4)),
+                          BoxDecoration(color: Colors.black.withValues(alpha:0.4)),
                       child: Row(
                         children: [
                           IconButton(
@@ -286,7 +287,7 @@ Positioned.fill(
                       padding:
                           const EdgeInsets.symmetric(vertical: AppSpacing.md),
                       decoration:
-                          BoxDecoration(color: Colors.black.withOpacity(0.5)),
+                          BoxDecoration(color: Colors.black.withValues(alpha:0.5)),
                       child: Row(
   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
   children: [
@@ -328,10 +329,10 @@ Positioned.fill(
           padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md, vertical: AppSpacing.sm + 2),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.55),
+            color: Colors.black.withValues(alpha:0.55),
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(
-                color: AppColors.warning.withOpacity(0.5), width: 0.5),
+                color: AppColors.warning.withValues(alpha:0.5), width: 0.5),
           ),
           child: Row(
             children: [
@@ -365,7 +366,7 @@ Positioned.fill(
                           ? '방금 카메라를 등록한 경우 최대 1분 정도 걸려요'
                           : '잠시만 기다려 주세요',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha:0.7),
                         fontSize: 11,
                       ),
                     ),
@@ -411,7 +412,7 @@ Widget _buildActiveControlBtn({
               icon,
               color: enabled
                   ? Colors.white
-                  : Colors.white.withOpacity(0.4),
+                  : Colors.white.withValues(alpha:0.4),
               size: 28,
             ),
           const SizedBox(height: 6),
@@ -420,7 +421,7 @@ Widget _buildActiveControlBtn({
             style: TextStyle(
               color: enabled
                   ? Colors.white
-                  : Colors.white.withOpacity(0.4),
+                  : Colors.white.withValues(alpha:0.4),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -449,7 +450,7 @@ Widget _buildActiveControlBtn({
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(icon, color: Colors.white.withOpacity(0.5), size: 28),
+                Icon(icon, color: Colors.white.withValues(alpha:0.5), size: 28),
                 // 우측 상단에 "soon" 점 표시
                 Positioned(
                   top: -2,
@@ -478,7 +479,7 @@ Widget _buildActiveControlBtn({
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withValues(alpha:0.5),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

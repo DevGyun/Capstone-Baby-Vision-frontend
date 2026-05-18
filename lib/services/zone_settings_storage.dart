@@ -9,8 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// 저장 형식: SharedPreferences key "zone_settings"
 /// {
-///   "<zone_id>": {"dangerLevel": 2, "objectDetection": true},
-///   "<zone_id>": {...},
+///   `"<zone_id>"`: {"dangerLevel": 2, "objectDetection": true},
+///   `"<zone_id>"`: {...},
 /// }
 class ZoneSettingsStorage {
   static const String _key = 'zone_settings';
