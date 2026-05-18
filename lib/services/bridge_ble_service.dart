@@ -222,17 +222,25 @@ if (n.toLowerCase().startsWith(prefixLower)) {
 
     try {
       // 1) 연결
+      print('[BLE][v3] connect 시작');
       await device.connect(
         timeout: const Duration(seconds: 12),
         autoConnect: false,
       );
+      print('[BLE][v3] connect 성공, isConnected=${device.isConnected}');
       _connectedDevice = device;
 
       // 연결 직후 안드로이드 블루투스 스택 안정을 위해 2초 대기
       await Future.delayed(const Duration(seconds: 2));
-      // 3) 서비스/특성 검색
-      // 이제 시스템이 안정된 상태이므로 에러 없이 정상적으로 서비스를 찾아냅니다!
+      print('[BLE][v3] 2초 대기 완료, isConnected=${device.isConnected}');
+
+      // 2) 서비스/특성 검색
+      print('[BLE][v3] discoverServices 시작');
       final services = await device.discoverServices();
+      print('[BLE][v3] 발견된 서비스 ${services.length}개:');
+      for (final s in services) {
+        print('[BLE][v3]   ${s.uuid}');
+      }
       BluetoothService? svc;
       for (final s in services) {
         if (s.uuid.toString().toLowerCase() ==
