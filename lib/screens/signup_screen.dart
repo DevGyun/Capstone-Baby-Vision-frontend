@@ -161,7 +161,7 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
 
               // 이름
-              _FieldLabel(text: '이름'),
+              const FieldLabel('이름'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _nameController,
@@ -174,7 +174,7 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: AppSpacing.md),
 
               // 이메일
-              _FieldLabel(text: '이메일'),
+              const FieldLabel('이메일'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _emailController,
@@ -188,7 +188,7 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: AppSpacing.md),
 
               // 비밀번호
-              _FieldLabel(text: '비밀번호'),
+              const FieldLabel('비밀번호'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _passwordController,
@@ -241,21 +241,6 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
     );
   }
 }

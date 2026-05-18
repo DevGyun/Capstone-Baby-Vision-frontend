@@ -7,3 +7,4 @@ export 'soft_chip.dart';
 export 'empty_state_view.dart';
 export 'skeleton_loader.dart';
 export 'initial_avatar.dart';
+export 'field_label.dart';

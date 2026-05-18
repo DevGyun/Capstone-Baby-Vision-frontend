@@ -7,7 +7,7 @@ import '../providers/camera_provider.dart';
 import '../services/ble_permission_helper.dart';
 import '../services/bridge_ble_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/common/soft_button.dart';
+import '../widgets/common/common.dart';
 
 /// ──────────────────────────────────────────────────────────────────
 ///  카메라 등록 플로우 (BLE 기반)
@@ -408,7 +408,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           ),
           const SizedBox(height: 24),
 
-          _FieldLabel(text: 'Wi-Fi 이름 (SSID)'),
+          const FieldLabel('Wi-Fi 이름 (SSID)', onDarkBackground: true),
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _ssidController,
@@ -426,7 +426,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          _FieldLabel(text: 'Wi-Fi 비밀번호'),
+          const FieldLabel('Wi-Fi 비밀번호', onDarkBackground: true),
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _passwordController,
@@ -456,7 +456,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           ),
           const SizedBox(height: AppSpacing.md),
 
-          _FieldLabel(text: '카메라 이름'),
+          const FieldLabel('카메라 이름', onDarkBackground: true),
           const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _cameraNameController,
@@ -728,23 +728,6 @@ class _SignalIcon extends StatelessWidget {
           ),
         );
       }),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
     );
   }
 }

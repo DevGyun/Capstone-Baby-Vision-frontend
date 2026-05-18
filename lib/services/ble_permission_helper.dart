@@ -58,15 +58,7 @@ class BlePermissionHelper {
         return BlePermissionResult.denied;
     }
   }
-
-  /// 영구 거부됐을 때 호출 — 시스템 앱 설정 화면 열기.
-  static Future<void> openAppSettings() async {
-    await openAppSettingsHandler();
-  }
 }
-
-/// permission_handler의 openAppSettings를 임포트 충돌 없이 쓰기 위한 래퍼.
-Future<bool> openAppSettingsHandler() => openAppSettings();
 
 enum BlePermissionResult {
   granted,

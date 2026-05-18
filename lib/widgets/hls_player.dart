@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 // 웹/모바일 자동 분기
-import 'hls_player_mobile.dart' if (dart.library.html) 'hls_player_web.dart';
+import 'hls_player_mobile.dart';
 
 class HlsPlayer extends StatelessWidget {
   // 백엔드의 hls_url 그대로: http://host:8888/{uuid}/index.m3u8

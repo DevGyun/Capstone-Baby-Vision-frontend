@@ -25,7 +25,6 @@ import 'zone_screen.dart';
 // 6. Theme & widgets
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
-import '../widgets/common/initial_avatar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

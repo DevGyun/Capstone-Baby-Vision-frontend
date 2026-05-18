@@ -139,7 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: AppSpacing.xl + AppSpacing.sm),
 
-              _FieldLabel(text: '이메일'),
+              const FieldLabel('이메일'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _emailController,
@@ -152,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
 
-              _FieldLabel(text: '비밀번호'),
+              const FieldLabel('비밀번호'),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 controller: _passwordController,
@@ -295,21 +295,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
     );
   }
 }

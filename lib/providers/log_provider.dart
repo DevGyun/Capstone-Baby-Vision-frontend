@@ -161,9 +161,4 @@ Future<void> clearSeenAlerts() async {
   await AlertSeenStorage.clear();
 }
 
-  void addLog(IncidentLog newLog) {
-    _logs.insert(0, newLog);
-    notifyListeners();
-  }
-  
 }
