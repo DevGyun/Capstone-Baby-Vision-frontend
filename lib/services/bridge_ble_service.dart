@@ -316,7 +316,7 @@ if (n.toLowerCase().startsWith(prefixLower)) {
 
       // writeWithoutResponse는 빠르지만 응답 보장 X
       // 페어링 같은 1회성 중요 작업은 응답 받는 write 사용
-      await provisioningChar.write(bytes, withoutResponse: false);
+      await provisioningChar.write(bytes, withoutResponse: true);
 
       // 6) 전체 타임아웃 — 브릿지가 wifi 연결 + 서버 register까지 마칠 시간
       timeoutTimer = Timer(totalTimeout, () {
