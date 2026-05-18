@@ -364,12 +364,13 @@ if (n.toLowerCase().startsWith(prefixLower)) {
 
   String _humanizeBleError(Object e) {
     final s = e.toString();
+    print('[BLE ERROR] $s');
     if (s.contains('timeout')) return '카메라 연결 시간이 초과됐어요';
     if (s.contains('disconnected')) return '카메라와의 연결이 끊겼어요';
     if (s.contains('not supported')) return '이 기기는 BLE를 지원하지 않아요';
     if (s.contains('permission')) {
       return '블루투스 권한이 없어요. 설정에서 허용해 주세요';
     }
-    return '블루투스 통신 중 오류가 발생했어요';
+    return '블루투스 통신 중 오류가 발생했어요\n($s)';
   }
 }
