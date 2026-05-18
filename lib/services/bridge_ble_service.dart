@@ -228,12 +228,8 @@ if (n.toLowerCase().startsWith(prefixLower)) {
       );
       _connectedDevice = device;
 
-      // 🌟 [추가] 연결 직후 안드로이드 블루투스 스택 안정을 위해 1초 대기
-      await Future.delayed(const Duration(seconds: 1));
-
-      // 2) MTU 확장 생략 — 브릿지(BlueZ)가 MTU 협상에 응답하지 않아
-      // 15초 타임아웃 후 연결이 끊어지는 문제가 있었음.
-      // 기본 MTU로도 flutter_blue_plus가 자동 분할 전송함.
+      // 연결 직후 안드로이드 블루투스 스택 안정을 위해 2초 대기
+      await Future.delayed(const Duration(seconds: 2));
       // 3) 서비스/특성 검색
       // 이제 시스템이 안정된 상태이므로 에러 없이 정상적으로 서비스를 찾아냅니다!
       final services = await device.discoverServices();
