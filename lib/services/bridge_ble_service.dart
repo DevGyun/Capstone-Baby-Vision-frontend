@@ -19,7 +19,7 @@ class BleContract {
 
   /// 메인 서비스 UUID
   static const String serviceUuid =
-      '0000eyec-0000-1000-8000-00805f9b34fb';
+      '0000ebec-0000-1000-8000-00805f9b34fb';
 
   /// 앱→브릿지: Wi-Fi 정보 + 카메라 이름 전달 (JSON Write)
   /// 페이로드: {"ssid": "...", "password": "...", "camera_name": "..."}
