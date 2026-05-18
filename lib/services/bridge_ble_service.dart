@@ -231,19 +231,9 @@ if (n.toLowerCase().startsWith(prefixLower)) {
       // 🌟 [추가] 연결 직후 안드로이드 블루투스 스택 안정을 위해 1초 대기
       await Future.delayed(const Duration(seconds: 1));
 
-      // 2) MTU 확장 시도 (Android 전용 — iOS는 자동)
-      // JSON 페이로드가 길어질 수 있으므로 최대한 늘려둠
-      try {
-        await device.requestMtu(247);
-        
-        // 🌟 [추가] MTU 확장 및 안드로이드 시스템의 bonding(임시 페어링) 절차가 
-        // 완료되거나 안정화될 때까지 3초간 충분히 기다려 줍니다.
-        // 이 딜레이가 있어야 로그의 'bonding' 단계 충돌로 인한 튕김을 막을 수 있습니다.
-        await Future.delayed(const Duration(seconds: 3));
-      } catch (_) {}
-      if (!device.isConnected){
-        throw Exception('disconnected');
-      }
+      // 2) MTU 확장 생략 — 브릿지(BlueZ)가 MTU 협상에 응답하지 않아
+      // 15초 타임아웃 후 연결이 끊어지는 문제가 있었음.
+      // 기본 MTU로도 flutter_blue_plus가 자동 분할 전송함.
       // 3) 서비스/특성 검색
       // 이제 시스템이 안정된 상태이므로 에러 없이 정상적으로 서비스를 찾아냅니다!
       final services = await device.discoverServices();
