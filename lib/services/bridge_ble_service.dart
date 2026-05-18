@@ -241,7 +241,9 @@ if (n.toLowerCase().startsWith(prefixLower)) {
         // 이 딜레이가 있어야 로그의 'bonding' 단계 충돌로 인한 튕김을 막을 수 있습니다.
         await Future.delayed(const Duration(seconds: 3));
       } catch (_) {}
-
+      if (!device.isConnected){
+        throw Exception('disconnected');
+      }
       // 3) 서비스/특성 검색
       // 이제 시스템이 안정된 상태이므로 에러 없이 정상적으로 서비스를 찾아냅니다!
       final services = await device.discoverServices();
