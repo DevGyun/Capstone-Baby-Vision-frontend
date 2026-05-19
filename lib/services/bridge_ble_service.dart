@@ -259,6 +259,10 @@ if (n.toLowerCase().startsWith(prefixLower)) {
           '카메라에서 EyeCatch 서비스를 찾지 못했어요',
         );
       }
+      debugPrint('[BLE][v3] 발견된 특성 ${svc.characteristics.length}개:');
+for (final c in svc.characteristics) {
+  debugPrint('[BLE][v3]   ${c.uuid} (props: ${c.properties})');
+}
 
       final provisioningChar = _findChar(svc, BleContract.provisioningCharUuid);
       final statusChar = _findChar(svc, BleContract.statusCharUuid);
@@ -342,14 +346,19 @@ if (n.toLowerCase().startsWith(prefixLower)) {
   }
 
   BluetoothCharacteristic? _findChar(
-    BluetoothService service,
-    String uuid,
-  ) {
-    for (final c in service.characteristics) {
-      if (c.uuid.toString().toLowerCase() == uuid.toLowerCase()) return c;
+  BluetoothService service,
+  String uuid,
+) {
+  final target = uuid.toLowerCase();
+  for (final c in service.characteristics) {
+    final cu = c.uuid.toString().toLowerCase();
+    // 서비스 UUID와 동일한 로직 — 16-bit 축약형(ec01) 대응
+    if (cu == target || target.startsWith('0000$cu-')) {
+      return c;
     }
-    return null;
   }
+  return null;
+}
 
   /// 외부에서 BLE 연결을 강제 종료하고 싶을 때 (사용자가 취소 누름 등)
   Future<void> cancel() async {
