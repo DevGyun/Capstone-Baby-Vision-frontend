@@ -49,7 +49,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       } else {
         _selectedIds.add(id);
       }
-      // 다 빼면 선택 모드 자동 해제
       if (_selectedIds.isEmpty) _selectionMode = false;
     });
   }
@@ -82,7 +81,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       title: '선택한 $count개 삭제',
       message: '선택하신 알림이 영구 삭제돼요.\n복구할 수 없어요.',
       confirmLabel: '삭제',
-      isDanger: true,
     );
     if (!confirmed || !mounted) return;
 
@@ -110,7 +108,6 @@ class _HistoryScreenState extends State<HistoryScreen>
       title: '모든 알림 삭제',
       message: '저장된 모든 알림 기록이 영구 삭제돼요.\n복구할 수 없어요.',
       confirmLabel: '전체 삭제',
-      isDanger: true,
     );
     if (!confirmed || !mounted) return;
 
@@ -132,7 +129,6 @@ class _HistoryScreenState extends State<HistoryScreen>
     required String title,
     required String message,
     required String confirmLabel,
-    bool isDanger = false,
   }) async {
     final result = await showDialog<bool>(
       context: context,
@@ -155,14 +151,13 @@ class _HistoryScreenState extends State<HistoryScreen>
                     height: 48,
                     margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     decoration: BoxDecoration(
-                      color: (isDanger ? AppColors.danger : AppColors.accent)
-                          .withValues(alpha: 0.12),
+                      color: AppColors.danger.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
+                    child: const Icon(
                       Icons.delete_outline,
-                      color: isDanger ? AppColors.danger : AppColors.accent,
+                      color: AppColors.danger,
                       size: 26,
                     ),
                   ),
@@ -200,8 +195,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                       child: FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
                         style: FilledButton.styleFrom(
-                          backgroundColor:
-                              isDanger ? AppColors.danger : AppColors.accent,
+                          backgroundColor: AppColors.danger,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Text(confirmLabel),
@@ -238,30 +232,22 @@ class _HistoryScreenState extends State<HistoryScreen>
                 tooltip: '선택 취소',
               )
             : null,
-        title: _selectionMode
-            ? Text(
-                '${_selectedIds.length}개 선택됨',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              )
-            : Text(
-                '사건 로그 내역',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-              ),
+        title: Text(
+          _selectionMode
+              ? '${_selectedIds.length}개 선택됨'
+              : '사건 로그 내역',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
+        ),
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: _selectionMode
             ? [
                 IconButton(
                   icon: Icon(
-                    allSelected
-                        ? Icons.deselect
-                        : Icons.select_all,
+                    allSelected ? Icons.deselect : Icons.select_all,
                   ),
                   onPressed: () {
                     if (allSelected) {
@@ -340,14 +326,15 @@ class _HistoryScreenState extends State<HistoryScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (!_selectionMode)
+              if (!_selectionMode) ...[
                 Text(
                   '우리 아이 안심 로그',
                   style: Theme.of(context).textTheme.displayLarge ??
                       const TextStyle(
                           fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-              if (!_selectionMode) const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.lg),
+              ],
 
               if (isLoading && logs.isEmpty)
                 Column(
@@ -465,42 +452,12 @@ class _HistoryScreenState extends State<HistoryScreen>
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: log.snapshotUrl != null
-                      ? Image.network(
-                          log.snapshotUrl!,
-                          height: 160,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, progress) {
-                            if (progress == null) return child;
-                            return Container(
-                              height: 160,
-                              color: cs.surfaceContainerHighest,
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: AppColors.accent,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (_, __, ___) => Image.asset(
-                            IncidentLog.fallbackAsset,
-                            height: 160,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Image.asset(
-                          IncidentLog.fallbackAsset,
-                          height: 160,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                  child: Image.asset(
+                    log.imageUrl,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
                 Positioned(
                   top: AppSpacing.sm,
