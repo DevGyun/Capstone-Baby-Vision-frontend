@@ -160,5 +160,77 @@ Future<void> _maybePushNewAlerts(List<IncidentLog> latestLogs) async {
 Future<void> clearSeenAlerts() async {
   await AlertSeenStorage.clear();
 }
+/// 단일 알림 삭제. 낙관적 UI — 화면에서 먼저 빼고, 실패 시 되돌림.
+Future<bool> deleteAlert(int alertId) async {
+  final original = List<IncidentLog>.from(_logs);
+  _logs.removeWhere((l) => l.id == alertId);
+  notifyListeners();
 
+  try {
+    final response = await ApiClient.request('DELETE', '/alerts/$alertId');
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return true;
+    }
+    _logs = original;
+    notifyListeners();
+    return false;
+  } catch (e) {
+    debugPrint('알림 삭제 에러: $e');
+    _logs = original;
+    notifyListeners();
+    return false;
+  }
+}
+
+/// 여러 알림 일괄 삭제. 성공한 갯수 반환.
+Future<int> deleteAlerts(List<int> alertIds) async {
+  if (alertIds.isEmpty) return 0;
+
+  final original = List<IncidentLog>.from(_logs);
+  final idSet = alertIds.toSet();
+  _logs.removeWhere((l) => idSet.contains(l.id));
+  notifyListeners();
+
+  try {
+    final response = await ApiClient.request(
+      'POST',
+      '/alerts/bulk-delete',
+      body: {'alert_ids': alertIds},
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return (data['deleted_count'] as int?) ?? 0;
+    }
+    _logs = original;
+    notifyListeners();
+    return 0;
+  } catch (e) {
+    debugPrint('알림 일괄 삭제 에러: $e');
+    _logs = original;
+    notifyListeners();
+    return 0;
+  }
+}
+
+/// 전체 삭제.
+Future<bool> clearAllAlerts() async {
+  final original = List<IncidentLog>.from(_logs);
+  _logs.clear();
+  notifyListeners();
+
+  try {
+    final response = await ApiClient.request('DELETE', '/alerts');
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      return true;
+    }
+    _logs = original;
+    notifyListeners();
+    return false;
+  } catch (e) {
+    debugPrint('알림 전체 삭제 에러: $e');
+    _logs = original;
+    notifyListeners();
+    return false;
+  }
+}
 }

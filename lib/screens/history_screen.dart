@@ -13,8 +13,15 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProviderStateMixin {
+class _HistoryScreenState extends State<HistoryScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
+
+  /// 선택 모드 켜졌는지
+  bool _selectionMode = false;
+
+  /// 선택된 알림 ID들
+  final Set<int> _selectedIds = {};
 
   @override
   void initState() {
@@ -35,6 +42,182 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     super.dispose();
   }
 
+  void _toggleSelection(int id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+      // 다 빼면 선택 모드 자동 해제
+      if (_selectedIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _enterSelectionMode(int initialId) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(initialId);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAll(List<IncidentLog> logs) {
+    setState(() {
+      _selectedIds
+        ..clear()
+        ..addAll(logs.map((l) => l.id));
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    final confirmed = await _showConfirmDialog(
+      title: '선택한 $count개 삭제',
+      message: '선택하신 알림이 영구 삭제돼요.\n복구할 수 없어요.',
+      confirmLabel: '삭제',
+      isDanger: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final ids = _selectedIds.toList();
+    final deleted = await context.read<LogProvider>().deleteAlerts(ids);
+
+    if (!mounted) return;
+    _exitSelectionMode();
+
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          deleted > 0
+              ? '$deleted개의 알림이 삭제됐어요'
+              : '삭제에 실패했어요. 다시 시도해 주세요',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteAll() async {
+    final confirmed = await _showConfirmDialog(
+      title: '모든 알림 삭제',
+      message: '저장된 모든 알림 기록이 영구 삭제돼요.\n복구할 수 없어요.',
+      confirmLabel: '전체 삭제',
+      isDanger: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await context.read<LogProvider>().clearAllAlerts();
+
+    if (!mounted) return;
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? '모든 알림이 삭제됐어요' : '삭제에 실패했어요. 다시 시도해 주세요',
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _showConfirmDialog({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    bool isDanger = false,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return Dialog(
+          backgroundColor: cs.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: (isDanger ? AppColors.danger : AppColors.accent)
+                          .withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.delete_outline,
+                      color: isDanger ? AppColors.danger : AppColors.accent,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                Text(
+                  title,
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  message,
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('취소'),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm + 2),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              isDanger ? AppColors.danger : AppColors.accent,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: Text(confirmLabel),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return result ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -42,18 +225,106 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     final logs = logProvider.logs;
     final isLoading = logProvider.isLoading;
 
+    final allSelected =
+        logs.isNotEmpty && _selectedIds.length == logs.length;
+
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        title: Text('사건 로그 내역', style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
+        leading: _selectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelectionMode,
+                tooltip: '선택 취소',
+              )
+            : null,
+        title: _selectionMode
+            ? Text(
+                '${_selectedIds.length}개 선택됨',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
+              )
+            : Text(
+                '사건 로그 내역',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
+              ),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: isLoading ? null : () => context.read<LogProvider>().fetchAlerts(),
-          ),
-        ],
+        actions: _selectionMode
+            ? [
+                IconButton(
+                  icon: Icon(
+                    allSelected
+                        ? Icons.deselect
+                        : Icons.select_all,
+                  ),
+                  onPressed: () {
+                    if (allSelected) {
+                      setState(() => _selectedIds.clear());
+                    } else {
+                      _selectAll(logs);
+                    }
+                  },
+                  tooltip: allSelected ? '전체 해제' : '전체 선택',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      color: AppColors.danger),
+                  onPressed:
+                      _selectedIds.isEmpty ? null : _deleteSelected,
+                  tooltip: '선택 삭제',
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: isLoading
+                      ? null
+                      : () => context.read<LogProvider>().fetchAlerts(),
+                ),
+                if (logs.isNotEmpty)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert),
+                    onSelected: (value) {
+                      if (value == 'select') {
+                        setState(() {
+                          _selectionMode = true;
+                        });
+                      } else if (value == 'clear_all') {
+                        _deleteAll();
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'select',
+                        child: Row(
+                          children: [
+                            Icon(Icons.checklist, size: 18),
+                            SizedBox(width: 12),
+                            Text('선택'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'clear_all',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_sweep_outlined,
+                                size: 18, color: AppColors.danger),
+                            SizedBox(width: 12),
+                            Text('전체 삭제',
+                                style: TextStyle(color: AppColors.danger)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
       ),
       body: RefreshIndicator(
         color: AppColors.accent,
@@ -61,26 +332,34 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(
-  left: AppSpacing.lg,
-  right: AppSpacing.lg,
-  top: AppSpacing.lg,
-  bottom: 120 + MediaQuery.of(context).padding.bottom,
-),
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: AppSpacing.lg,
+            bottom: 120 + MediaQuery.of(context).padding.bottom,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('우리 아이 안심 로그', style: Theme.of(context).textTheme.displayLarge ?? const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: AppSpacing.lg),
+              if (!_selectionMode)
+                Text(
+                  '우리 아이 안심 로그',
+                  style: Theme.of(context).textTheme.displayLarge ??
+                      const TextStyle(
+                          fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+              if (!_selectionMode) const SizedBox(height: AppSpacing.lg),
 
               if (isLoading && logs.isEmpty)
                 Column(
-                  children: List.generate(3, (index) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _buildSkeletonCard(),
-                  )),
+                  children: List.generate(
+                    3,
+                    (index) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _buildSkeletonCard(),
+                    ),
+                  ),
                 )
               else if (logs.isEmpty)
-                // ✅ 이 부분을 수정했습니다: SizedBox로 감싸 가로 전체 공간을 확보합니다.
                 const SizedBox(
                   width: double.infinity,
                   child: EmptyStateView(
@@ -91,10 +370,13 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                 )
               else
                 Column(
-                  children: logs.map((log) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _buildLogCard(context, log),
-                  )).toList(),
+                  children: logs
+                      .map((log) => Padding(
+                            padding:
+                                const EdgeInsets.only(bottom: AppSpacing.md),
+                            child: _buildLogCard(context, log),
+                          ))
+                      .toList(),
                 ),
             ],
           ),
@@ -112,12 +394,22 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         return Opacity(
           opacity: 0.5 + (_pulseController.value * 0.5),
           child: Container(
-            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(AppRadius.lg)),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+            ),
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(height: 160, width: double.infinity, decoration: BoxDecoration(color: baseColor, borderRadius: BorderRadius.circular(AppRadius.md))),
+                Container(
+                  height: 160,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: baseColor,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
                 const SizedBox(height: AppSpacing.md),
                 Container(height: 14, width: 80, color: baseColor),
                 const SizedBox(height: AppSpacing.sm),
@@ -134,16 +426,35 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
 
   Widget _buildLogCard(BuildContext context, IncidentLog log) {
     final cs = Theme.of(context).colorScheme;
+    final isSelected = _selectedIds.contains(log.id);
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => IncidentDetailsScreen(log: log)),
-      ),
-      child: Container(
+      onTap: () {
+        if (_selectionMode) {
+          _toggleSelection(log.id);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => IncidentDetailsScreen(log: log),
+            ),
+          );
+        }
+      },
+      onLongPress: () {
+        if (!_selectionMode) {
+          _enterSelectionMode(log.id);
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(
+            color: isSelected ? AppColors.accent : Colors.transparent,
+            width: 2,
+          ),
           boxShadow: AppShadows.card(context),
         ),
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -154,39 +465,137 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Image.asset(log.imageUrl, height: 160, width: double.infinity, fit: BoxFit.cover),
+                  child: log.snapshotUrl != null
+                      ? Image.network(
+                          log.snapshotUrl!,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Container(
+                              height: 160,
+                              color: cs.surfaceContainerHighest,
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Image.asset(
+                            IncidentLog.fallbackAsset,
+                            height: 160,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Image.asset(
+                          IncidentLog.fallbackAsset,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
                 ),
                 Positioned(
-                  top: AppSpacing.sm, left: AppSpacing.sm,
+                  top: AppSpacing.sm,
+                  left: AppSpacing.sm,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: log.iconColor, borderRadius: BorderRadius.circular(AppRadius.sm)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: log.iconColor,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
                     child: Row(
                       children: [
                         Icon(log.icon, color: Colors.white, size: 12),
                         const SizedBox(width: 4),
-                        Text(log.title, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(
+                          log.title,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold),
+                        ),
                       ],
                     ),
                   ),
                 ),
-                if (!log.isRead)
+                if (!log.isRead && !_selectionMode)
                   Positioned(
-                    top: AppSpacing.sm, right: AppSpacing.sm,
+                    top: AppSpacing.sm,
+                    right: AppSpacing.sm,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                      child: const Text('NEW', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.danger,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                      ),
+                      child: const Text(
+                        'NEW',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                // 선택 모드 체크박스
+                if (_selectionMode)
+                  Positioned(
+                    top: AppSpacing.sm,
+                    right: AppSpacing.sm,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppColors.accent
+                            : Colors.white.withValues(alpha: 0.85),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected
+                              ? AppColors.accent
+                              : Colors.grey.shade400,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: isSelected
+                          ? const Icon(
+                              Icons.check,
+                              size: 16,
+                              color: Colors.white,
+                            )
+                          : null,
                     ),
                   ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            Text(log.title, style: TextStyle(color: log.iconColor, fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(
+              log.title,
+              style: TextStyle(
+                  color: log.iconColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            Text(log.description, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(
+              log.description,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
-            Text(log.time, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+            Text(
+              log.time,
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
           ],
         ),
       ),
