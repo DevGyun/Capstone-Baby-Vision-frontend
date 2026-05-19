@@ -243,9 +243,12 @@ if (n.toLowerCase().startsWith(prefixLower)) {
         debugPrint('[BLE][v3]   ${s.uuid}');
       }
       BluetoothService? svc;
+      final targetUuid = BleContract.serviceUuid.toLowerCase();
       for (final s in services) {
-        if (s.uuid.toString().toLowerCase() ==
-            BleContract.serviceUuid.toLowerCase()) {
+        final uuid = s.uuid.toString().toLowerCase();
+        // flutter_blue_plus가 16-bit 축약형(ebec)으로 반환할 수 있으므로
+        // 전체 UUID에 축약형이 포함되는지도 확인
+        if (uuid == targetUuid || targetUuid.startsWith('0000$uuid-')) {
           svc = s;
           break;
         }
