@@ -4,20 +4,22 @@ import 'package:flutter/material.dart';
 import 'hls_player_mobile.dart';
 
 class HlsPlayer extends StatelessWidget {
-  // 백엔드의 hls_url 그대로: http://host:8888/{uuid}/index.m3u8
   final String streamUrl;
-
-  /// 스트림이 정상 연결됐을 때 콜백.
   final VoidCallback? onConnected;
-
-  /// 재시도가 일어날 때마다 콜백.
   final VoidCallback? onRetry;
+
+  /// true면 연결 직후 라이브 엣지로 점프.
+  /// HLS는 기본적으로 5~10초 뒤처져 재생되니, "지금 이 순간" 프레임이
+  /// 필요한 캡처용일 때 켜세요. 실시간 화면처럼 부드러운 재생이 필요한
+  /// 곳에선 false(기본값) 유지.
+  final bool seekToLiveOnConnect;
 
   const HlsPlayer({
     super.key,
     required this.streamUrl,
     this.onConnected,
     this.onRetry,
+    this.seekToLiveOnConnect = false,
   });
 
   @override
@@ -34,6 +36,7 @@ class HlsPlayer extends StatelessWidget {
       streamUrl,
       onConnected: onConnected,
       onRetry: onRetry,
+      seekToLiveOnConnect: seekToLiveOnConnect,
     );
   }
 }

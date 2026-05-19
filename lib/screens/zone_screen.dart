@@ -246,16 +246,16 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
 
   /// 라이브 영상이 연결되면 자동으로 한 프레임 캡처.
   /// HlsPlayer의 onConnected 콜백에서 호출됨.
-  void _onLiveConnected() {
-    if (_captureScheduled || _bgMode != _BackgroundMode.liveCapturing) return;
-    _captureScheduled = true;
+void _onLiveConnected() {
+  if (_captureScheduled || _bgMode != _BackgroundMode.liveCapturing) return;
+  _captureScheduled = true;
 
-    // 영상이 안정적으로 디코딩될 때까지 살짝 대기 후 캡처
-    Future.delayed(const Duration(milliseconds: 1500), () async {
-      if (!mounted) return;
-      await _captureLiveFrameToCache();
-    });
-  }
+  // 라이브 엣지로 점프 후, 새 세그먼트가 디코딩되고 렌더링될 시간 확보
+  Future.delayed(const Duration(milliseconds: 2500), () async {
+    if (!mounted) return;
+    await _captureLiveFrameToCache();
+  });
+}
 
   /// 라이브 영상을 캡처해 캐시 폴더에 저장
   Future<void> _captureLiveFrameToCache() async {
@@ -731,6 +731,7 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
             key: ValueKey('zone-live-${activeCamera.id}'),
             streamUrl: activeCamera.hlsUrl,
             onConnected: _onLiveConnected,
+            seekToLiveOnConnect: true,
           ),
         );
 

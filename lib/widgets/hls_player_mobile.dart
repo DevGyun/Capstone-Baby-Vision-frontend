@@ -6,28 +6,28 @@ Widget getPlatformPlayer(
   String hlsUrl, {
   VoidCallback? onConnected,
   VoidCallback? onRetry,
+  bool seekToLiveOnConnect = false,
 }) {
   return MobileHlsPlayer(
     hlsUrl: hlsUrl,
     onConnected: onConnected,
     onRetry: onRetry,
+    seekToLiveOnConnect: seekToLiveOnConnect,
   );
 }
 
 class MobileHlsPlayer extends StatefulWidget {
   final String hlsUrl;
-
-  /// 스트림 연결에 성공했을 때 콜백 (LiveStreamScreen에서 안내문 숨기는 용도).
   final VoidCallback? onConnected;
-
-  /// 재시도가 한 번 발생할 때마다 콜백.
   final VoidCallback? onRetry;
+  final bool seekToLiveOnConnect;
 
   const MobileHlsPlayer({
     super.key,
     required this.hlsUrl,
     this.onConnected,
     this.onRetry,
+    this.seekToLiveOnConnect = false,
   });
 
   @override
@@ -78,11 +78,21 @@ class _MobileHlsPlayerState extends State<MobileHlsPlayer> {
       }
 
       setState(() {
-        _controller = controller;
-        _isInitialized = true;
-        _retryCount = 0;
-      });
-      controller.play();
+  _controller = controller;
+  _isInitialized = true;
+  _retryCount = 0;
+});
+controller.play();
+
+// ▼ 추가: 라이브 엣지로 점프 (HLS 지연 보정)
+if (widget.seekToLiveOnConnect) {
+  final duration = controller.value.duration;
+  if (duration > Duration.zero) {
+    await controller.seekTo(duration);
+  }
+}
+
+widget.onConnected?.call();
       widget.onConnected?.call();
     } catch (error) {
       debugPrint('HLS 연결 실패 (시도 ${_retryCount + 1}/$_maxRetries): $error');
