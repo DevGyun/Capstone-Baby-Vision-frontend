@@ -42,16 +42,16 @@ class _HistoryScreenState extends State<HistoryScreen>
     super.dispose();
   }
 
-  void _toggleSelection(int id) {
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-      if (_selectedIds.isEmpty) _selectionMode = false;
-    });
-  }
+void _toggleSelection(int id) {
+  setState(() {
+    if (_selectedIds.contains(id)) {
+      _selectedIds.remove(id);
+    } else {
+      _selectedIds.add(id);
+    }
+    if (_selectedIds.isEmpty) _selectionMode = false;
+  });
+}
 
   void _enterSelectionMode(int initialId) {
     setState(() {
@@ -75,33 +75,41 @@ class _HistoryScreenState extends State<HistoryScreen>
     });
   }
 
-  Future<void> _deleteSelected() async {
-    final count = _selectedIds.length;
-    final confirmed = await _showConfirmDialog(
-      title: '선택한 $count개 삭제',
-      message: '선택하신 알림이 영구 삭제돼요.\n복구할 수 없어요.',
-      confirmLabel: '삭제',
-    );
-    if (!confirmed || !mounted) return;
+Future<void> _deleteSelected() async {
+  final count = _selectedIds.length;
+  final confirmed = await _showConfirmDialog(
+    title: '선택한 $count개 삭제',
+    message: '선택하신 알림이 영구 삭제돼요.\n복구할 수 없어요.',
+    confirmLabel: '삭제',
+  );
+  if (!confirmed || !mounted) return;
 
-    final messenger = ScaffoldMessenger.of(context);
-    final ids = _selectedIds.toList();
-    final deleted = await context.read<LogProvider>().deleteAlerts(ids);
+  final messenger = ScaffoldMessenger.of(context);
+  final ids = _selectedIds.toList();
 
-    if (!mounted) return;
-    _exitSelectionMode();
+  // ▼ 수정: API 호출 전에 미리 선택 모드 종료.
+  //   - 사용자 입장에선 즉시 반응 (낙관적 UI와 결이 맞음)
+  //   - await 중 rebuild로 카운트가 어긋나는 문제 차단
+  setState(() {
+    _selectionMode = false;
+    _selectedIds.clear();
+  });
 
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          deleted > 0
-              ? '$deleted개의 알림이 삭제됐어요'
-              : '삭제에 실패했어요. 다시 시도해 주세요',
-        ),
+  final deleted = await context.read<LogProvider>().deleteAlerts(ids);
+
+  if (!mounted) return;
+
+  messenger.clearSnackBars();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        deleted > 0
+            ? '$deleted개의 알림이 삭제됐어요'
+            : '삭제에 실패했어요. 다시 시도해 주세요',
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _deleteAll() async {
     final confirmed = await _showConfirmDialog(
@@ -213,14 +221,29 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final logProvider = context.watch<LogProvider>();
-    final logs = logProvider.logs;
-    final isLoading = logProvider.isLoading;
+Widget build(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  final logProvider = context.watch<LogProvider>();
+  final logs = logProvider.logs;
+  final isLoading = logProvider.isLoading;
 
-    final allSelected =
-        logs.isNotEmpty && _selectedIds.length == logs.length;
+  // ▼ 추가: _selectedIds를 항상 현재 보이는 logs와 동기화.
+  // 유령 ID(이미 삭제됐거나 폴링으로 사라진 ID)를 자동 정리해
+  // "N개 선택됨" 카운트가 실제 화면과 어긋나지 않게 함.
+  if (_selectedIds.isNotEmpty) {
+    final visibleIds = logs.map((l) => l.id).toSet();
+    final hadGhosts = _selectedIds.any((id) => !visibleIds.contains(id));
+    if (hadGhosts) {
+      _selectedIds.removeWhere((id) => !visibleIds.contains(id));
+      if (_selectedIds.isEmpty) {
+        _selectionMode = false;
+      }
+    }
+  }
+
+  final allSelected =
+      logs.isNotEmpty && _selectedIds.length == logs.length;
+  // ... (이하 동일)
 
     return Scaffold(
       backgroundColor: cs.surface,
