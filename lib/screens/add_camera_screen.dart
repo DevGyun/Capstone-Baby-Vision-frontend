@@ -9,25 +9,6 @@ import '../services/bridge_ble_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/common.dart';
 
-/// ──────────────────────────────────────────────────────────────────
-///  카메라 등록 플로우 (BLE 기반)
-///
-///  브릿지가 Wi-Fi 미연결 상태일 때 ble_server.py가 BLE 광고를 시작.
-///  앱이 BLE로 발견해서 Wi-Fi 정보 + 카메라 이름을 전달하고,
-///  브릿지가 받은 페어링 코드를 다시 BLE로 받아 서버에 등록.
-///
-///  단계:
-///    1. intro             — 카메라 전원 켜고 BLE 모드 진입 안내
-///    2. permission        — 블루투스 권한 요청
-///    3. scanning          — 주변 EyeCatch-XXXX 검색
-///    4. selectBridge      — 발견된 브릿지 중 선택
-///    5. enterCredentials  — 집 Wi-Fi SSID/PW + 카메라 이름 입력
-///    6. provisioning      — BLE로 정보 전송, 응답 대기
-///    7. pairingWithServer — BLE로 받은 코드로 서버에 POST /bridges/pair
-///    8. done              — 완료
-///    9. error             — 오류 (재시도 / 처음부터)
-/// ──────────────────────────────────────────────────────────────────
-
 enum AddCameraStep {
   intro,
   permission,
@@ -48,7 +29,6 @@ class AddCameraScreen extends StatefulWidget {
 }
 
 class _AddCameraScreenState extends State<AddCameraScreen> {
-  // ── 상태 ──────────────────────────────────────────────────────
   AddCameraStep _step = AddCameraStep.intro;
   String _errorMessage = '';
 
@@ -73,7 +53,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     super.dispose();
   }
 
-  // ── 단계 전이 헬퍼 ───────────────────────────────────────────────
   void _go(AddCameraStep s) {
     if (!mounted) return;
     setState(() => _step = s);
@@ -87,7 +66,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     });
   }
 
-  // ── 1단계 → 2단계: 권한 요청 ────────────────────────────────────
   Future<void> _requestPermissionAndScan() async {
     _go(AddCameraStep.permission);
 
@@ -102,8 +80,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
         _fail('블루투스 권한이 필요해요. 권한을 허용한 뒤 다시 시도해 주세요');
         break;
       case BlePermissionResult.permanentlyDenied:
-        _fail(
-            '블루투스 권한이 영구 거부되어 있어요.\n앱 설정 → 권한에서 직접 허용해 주세요');
+        _fail('블루투스 권한이 영구 거부되어 있어요.\n앱 설정 → 권한에서 직접 허용해 주세요');
         break;
       case BlePermissionResult.unsupported:
         _fail('이 기기에선 카메라 페어링을 사용할 수 없어요');
@@ -111,7 +88,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     }
   }
 
-  // ── 3단계: BLE 스캔 ──────────────────────────────────────────────
   Future<void> _startScan() async {
     _go(AddCameraStep.scanning);
     _bridges = [];
@@ -121,7 +97,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       (results) {
         if (!mounted) return;
         setState(() => _bridges = results);
-        // 한 개라도 발견되면 자동으로 선택 화면으로
         if (results.isNotEmpty && _step == AddCameraStep.scanning) {
           _go(AddCameraStep.selectBridge);
         }
@@ -132,14 +107,12 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       onDone: () {
         if (!mounted) return;
         if (_bridges.isEmpty) {
-          _fail(
-              '주변에서 카메라를 찾지 못했어요.\n카메라가 켜져 있고 페어링 모드인지 확인해 주세요');
+          _fail('주변에서 카메라를 찾지 못했어요.\n카메라가 켜져 있고 페어링 모드인지 확인해 주세요');
         }
       },
     );
   }
 
-  // ── 4단계: 브릿지 선택 → 5단계로 ────────────────────────────────
   void _selectBridge(DiscoveredBridge b) {
     _scanSub?.cancel();
     BridgeBleService.instance.stopScan();
@@ -149,34 +122,33 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     });
   }
 
-  // ── 6단계: provisioning (BLE 정보 전송) ─────────────────────────
   Future<void> _submitCredentials() async {
-  final ssid = _ssidController.text.trim();
-  final password = _passwordController.text;
-  final cameraName = _cameraNameController.text.trim();
+    final ssid = _ssidController.text.trim();
+    final password = _passwordController.text;
+    final cameraName = _cameraNameController.text.trim();
 
-  // 카메라 이름만 필수. Wi-Fi 정보는 비워도 OK
-  // (브릿지가 이미 Wi-Fi에 연결돼 있는 시연 환경 대응)
-  if (cameraName.isEmpty) {
-    _showSnack('카메라 이름을 입력해 주세요');
-    return;
-  }
-  if (_selectedBridge == null) {
-    _fail('선택된 카메라 정보가 없어요. 처음부터 다시 시도해 주세요');
-    return;
-  }
+    // Wi-Fi 정보는 비워도 OK (브릿지가 이미 연결돼 있는 경우 대응)
+    // 카메라 이름만 필수
+    if (cameraName.isEmpty) {
+      _showSnack('카메라 이름을 입력해 주세요');
+      return;
+    }
+    if (_selectedBridge == null) {
+      _fail('선택된 카메라 정보가 없어요. 처음부터 다시 시도해 주세요');
+      return;
+    }
 
-  _go(AddCameraStep.provisioning);
+    _go(AddCameraStep.provisioning);
 
-  final result = await BridgeBleService.instance.provisionAndAwaitCode(
-    bridge: _selectedBridge!,
-    ssid: ssid,            // 빈 문자열 가능 — 브릿지가 처리
-    password: password,    // 빈 문자열 가능
-    cameraName: cameraName,
-    onPhase: (phase) {
-      if (!mounted) return;
-      setState(() => _pairingPhase = phase);
-    },
+    final result = await BridgeBleService.instance.provisionAndAwaitCode(
+      bridge: _selectedBridge!,
+      ssid: ssid,
+      password: password,
+      cameraName: cameraName,
+      onPhase: (phase) {
+        if (!mounted) return;
+        setState(() => _pairingPhase = phase);
+      },
     );
 
     if (!mounted) return;
@@ -186,7 +158,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
       return;
     }
 
-    // ── 7단계: 서버 페어링 ────────────────────────────────────────
     _go(AddCameraStep.pairingWithServer);
 
     final provider = context.read<CameraProvider>();
@@ -203,7 +174,6 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     }
   }
 
-  // ── 에러에서 다시 시도 ──────────────────────────────────────────
   void _retryFromError() {
     setState(() {
       _step = AddCameraStep.intro;
@@ -219,17 +189,18 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ── Build ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('카메라 추가', style: TextStyle(color: Colors.white)),
+        title: Text('카메라 추가', style: TextStyle(color: cs.onSurface)),
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
+          icon: Icon(Icons.close, color: cs.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -265,8 +236,8 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     }
   }
 
-  // ── intro ─────────────────────────────────────────────────────
   Widget _buildIntroStep() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -274,20 +245,20 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
           const Icon(Icons.bluetooth_searching,
               size: 80, color: AppColors.accent),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             '카메라를 페어링 모드로 켜주세요',
             style: TextStyle(
-              color: Colors.white,
+              color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             '카메라가 처음 켜지면 자동으로\n블루투스 페어링 모드로 들어가요.\n앱이 주변에서 자동으로 찾아드려요.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, height: 1.5),
+            style: TextStyle(color: cs.onSurfaceVariant, height: 1.5),
           ),
           const SizedBox(height: 40),
           SizedBox(
@@ -303,29 +274,29 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     );
   }
 
-  // ── scanning ─────────────────────────────────────────────────
   Widget _buildScanningStep() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 펄스 애니메이션 느낌의 아이콘
           const Icon(Icons.bluetooth_searching,
               size: 80, color: AppColors.accent),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             '주변 카메라를 찾는 중...',
             style: TextStyle(
-              color: Colors.white,
+              color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             '카메라가 처음 켜진 상태여야 발견돼요.\n이미 등록된 카메라는 나타나지 않아요.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey, height: 1.5, fontSize: 13),
+            style: TextStyle(
+                color: cs.onSurfaceVariant, height: 1.5, fontSize: 13),
           ),
           const SizedBox(height: 32),
           const CircularProgressIndicator(color: AppColors.accent),
@@ -334,15 +305,15 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     );
   }
 
-  // ── selectBridge ─────────────────────────────────────────────
   Widget _buildSelectStep() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '발견된 카메라',
           style: TextStyle(
-            color: Colors.white,
+            color: cs.onSurface,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -350,7 +321,7 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
         const SizedBox(height: 8),
         Text(
           '${_bridges.length}대 발견 · 신호가 강한 순서로 표시',
-          style: const TextStyle(color: Colors.grey, fontSize: 13),
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
         ),
         const SizedBox(height: 24),
         Expanded(
@@ -379,162 +350,138 @@ class _AddCameraScreenState extends State<AddCameraScreen> {
     );
   }
 
- // ── enterCredentials ────────────────────────────────────────
-Widget _buildCredentialsStep() {
-  return SingleChildScrollView(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(Icons.wifi, size: 56, color: AppColors.accent),
-        const SizedBox(height: 16),
-        const Text(
-          'Wi-Fi 정보를 알려주세요',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '카메라(${_selectedBridge?.name ?? "-"})가 이 Wi-Fi에 연결돼서\n인터넷을 통해 영상을 보내게 돼요.',
-          style: const TextStyle(color: Colors.grey, fontSize: 13, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-
-        // ▼ 추가: Wi-Fi 선택 안내 배너
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.sm + 2),
-          decoration: BoxDecoration(
-            color: AppColors.accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(
-              color: AppColors.accent.withValues(alpha: 0.3),
-              width: 0.5,
+  Widget _buildCredentialsStep() {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.wifi, size: 56, color: AppColors.accent),
+          const SizedBox(height: 16),
+          Text(
+            'Wi-Fi 정보를 알려주세요',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline,
-                  size: 16, color: AppColors.accent),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  '카메라가 이미 Wi-Fi에 연결되어 있다면\nWi-Fi 정보는 비워두셔도 돼요',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 11,
-                    height: 1.4,
+          const SizedBox(height: 8),
+          Text(
+            '카메라(${_selectedBridge?.name ?? "-"})가 이 Wi-Fi에 연결돼서\n인터넷을 통해 영상을 보내게 돼요.',
+            style: TextStyle(
+                color: cs.onSurfaceVariant, fontSize: 13, height: 1.5),
+          ),
+          const SizedBox(height: 16),
+
+          // Wi-Fi 선택 안내 배너
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm + 2),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.3),
+                width: 0.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline,
+                    size: 16, color: AppColors.accent),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    '카메라가 이미 Wi-Fi에 연결되어 있다면\nWi-Fi 정보는 비워두셔도 돼요',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 11,
+                      height: 1.4,
+                    ),
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          const FieldLabel('Wi-Fi 이름 (SSID) · 선택'),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _ssidController,
+            decoration: const InputDecoration(
+              hintText: '예: MyHomeWiFi (비워둬도 돼요)',
+              prefixIcon: Icon(Icons.wifi, size: 20),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          const FieldLabel('Wi-Fi 비밀번호 · 선택'),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              hintText: '비밀번호 (비워둬도 돼요)',
+              prefixIcon: const Icon(Icons.lock_outline, size: 20),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          const FieldLabel('카메라 이름 · 필수'),
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _cameraNameController,
+            maxLength: 30,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submitCredentials(),
+            decoration: const InputDecoration(
+              hintText: '예: 거실, 아기방',
+              prefixIcon: Icon(Icons.videocam_outlined, size: 20),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.lock, size: 12, color: cs.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text(
+                'Wi-Fi 비밀번호는 카메라에만 전달되고 저장되지 않아요',
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 11,
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 24),
 
-        // ▼ 라벨에 "선택" 표시
-        const FieldLabel('Wi-Fi 이름 (SSID) · 선택', onDarkBackground: true),
-        const SizedBox(height: AppSpacing.sm),
-        TextField(
-          controller: _ssidController,
-          style: const TextStyle(color: Colors.black),
-          decoration: InputDecoration(
-            hintText: '예: MyHomeWiFi (비워둬도 돼요)',
-            filled: true,
-            fillColor: Colors.white,
-            prefixIcon: const Icon(Icons.wifi, size: 20),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+          SizedBox(
+            width: double.infinity,
+            child: SoftButton(
+              label: '카메라 등록하기',
+              icon: Icons.bluetooth_connected,
+              onPressed: _submitCredentials,
             ),
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
+        ],
+      ),
+    );
+  }
 
-        // ▼ 라벨에 "선택" 표시
-        const FieldLabel('Wi-Fi 비밀번호 · 선택', onDarkBackground: true),
-        const SizedBox(height: AppSpacing.sm),
-        TextField(
-          controller: _passwordController,
-          obscureText: _obscurePassword,
-          style: const TextStyle(color: Colors.black),
-          decoration: InputDecoration(
-            hintText: '비밀번호 (비워둬도 돼요)',
-            filled: true,
-            fillColor: Colors.white,
-            prefixIcon: const Icon(Icons.lock_outline, size: 20),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-                size: 20,
-                color: Colors.grey,
-              ),
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        // ▼ 라벨에 "필수" 표시
-        const FieldLabel('카메라 이름 · 필수', onDarkBackground: true),
-        const SizedBox(height: AppSpacing.sm),
-        TextField(
-          controller: _cameraNameController,
-          maxLength: 30,
-          style: const TextStyle(color: Colors.black),
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _submitCredentials(),
-          decoration: InputDecoration(
-            hintText: '예: 거실, 아기방',
-            filled: true,
-            fillColor: Colors.white,
-            prefixIcon: const Icon(Icons.videocam_outlined, size: 20),
-            counterStyle: const TextStyle(color: Colors.white38),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(Icons.lock, size: 12, color: Colors.grey),
-            const SizedBox(width: 4),
-            Text(
-              'Wi-Fi 비밀번호는 카메라에만 전달되고 저장되지 않아요',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        SizedBox(
-          width: double.infinity,
-          child: SoftButton(
-            label: '카메라 등록하기',
-            icon: Icons.bluetooth_connected,
-            onPressed: _submitCredentials,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-  // ── provisioning ─────────────────────────────────────────────
   Widget _buildProvisioningStep() {
+    final cs = Theme.of(context).colorScheme;
     final phaseLabel = switch (_pairingPhase) {
       BlePairingPhase.connecting => '카메라에 연결하는 중...',
       BlePairingPhase.sendingCredentials => 'Wi-Fi 정보를 전달하는 중...',
@@ -546,8 +493,7 @@ Widget _buildCredentialsStep() {
     final phaseDesc = switch (_pairingPhase) {
       BlePairingPhase.waitingWifi =>
         '카메라 근처에서 잠시 기다려 주세요. Wi-Fi 신호가 약하면 시간이 더 걸릴 수 있어요',
-      BlePairingPhase.waitingPairingCode =>
-        '거의 다 됐어요!',
+      BlePairingPhase.waitingPairingCode => '거의 다 됐어요!',
       _ => '잠시만 기다려 주세요',
     };
 
@@ -559,8 +505,8 @@ Widget _buildCredentialsStep() {
           const SizedBox(height: 24),
           Text(
             phaseLabel,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: cs.onSurface,
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),
@@ -569,7 +515,7 @@ Widget _buildCredentialsStep() {
           const SizedBox(height: 8),
           Text(
             phaseDesc,
-            style: const TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             textAlign: TextAlign.center,
           ),
         ],
@@ -577,26 +523,26 @@ Widget _buildCredentialsStep() {
     );
   }
 
-  // ── done ─────────────────────────────────────────────────────
   Widget _buildDoneStep() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.check_circle, size: 80, color: AppColors.success),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             '카메라가 등록되었어요!',
             style: TextStyle(
-              color: Colors.white,
+              color: cs.onSurface,
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '메인 화면에서 영상을 확인하실 수 있어요',
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
           const SizedBox(height: 40),
           SoftButton(
@@ -608,8 +554,8 @@ Widget _buildCredentialsStep() {
     );
   }
 
-  // ── error ────────────────────────────────────────────────────
   Widget _buildErrorStep() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -619,7 +565,7 @@ Widget _buildCredentialsStep() {
           Text(
             _errorMessage,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, height: 1.5),
+            style: TextStyle(color: cs.onSurface, height: 1.5),
           ),
           const SizedBox(height: 40),
           SoftButton(
@@ -632,8 +578,8 @@ Widget _buildCredentialsStep() {
     );
   }
 
-  // ── 공통 로딩 ─────────────────────────────────────────────────
   Widget _buildLoading(String message) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -643,7 +589,7 @@ Widget _buildCredentialsStep() {
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: cs.onSurface),
           ),
         ],
       ),
@@ -663,6 +609,7 @@ class _BridgeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -671,9 +618,9 @@ class _BridgeTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha:0.06),
+            color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: Colors.white24, width: 0.5),
+            border: Border.all(color: cs.outlineVariant, width: 0.5),
           ),
           child: Row(
             children: [
@@ -681,7 +628,7 @@ class _BridgeTile extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha:0.18),
+                  color: AppColors.accent.withValues(alpha: 0.18),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -698,8 +645,8 @@ class _BridgeTile extends StatelessWidget {
                   children: [
                     Text(
                       bridge.name,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: cs.onSurface,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -707,8 +654,8 @@ class _BridgeTile extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       bridge.distanceHint,
-                      style: const TextStyle(
-                        color: Colors.grey,
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),
@@ -717,7 +664,7 @@ class _BridgeTile extends StatelessWidget {
               ),
               _SignalIcon(rssi: bridge.rssi),
               const SizedBox(width: 6),
-              const Icon(Icons.chevron_right, color: Colors.white54),
+              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
             ],
           ),
         ),
@@ -726,7 +673,6 @@ class _BridgeTile extends StatelessWidget {
   }
 }
 
-/// Wi-Fi 신호 아이콘처럼 4단계로 표시 (Bluetooth지만 시각 메타포는 동일)
 class _SignalIcon extends StatelessWidget {
   final int rssi;
   const _SignalIcon({required this.rssi});
@@ -740,6 +686,7 @@ class _SignalIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final bars = _bars;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -751,7 +698,7 @@ class _SignalIcon extends StatelessWidget {
           height: 6.0 + i * 3,
           margin: const EdgeInsets.symmetric(horizontal: 1),
           decoration: BoxDecoration(
-            color: active ? AppColors.accent : Colors.white24,
+            color: active ? AppColors.accent : cs.outlineVariant,
             borderRadius: BorderRadius.circular(1),
           ),
         );
