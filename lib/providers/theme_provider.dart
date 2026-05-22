@@ -21,19 +21,6 @@ class ThemeProvider extends ChangeNotifier {
     }
   }
 
-  /// 현재 적용된 테마가 다크인지 — 시스템 따라가기일 때도 정확하게 판단.
-  /// MediaQuery 정보가 필요하므로 BuildContext와 함께 호출.
-  bool isDarkMode(BuildContext context) {
-    switch (_preference) {
-      case AppThemePreference.system:
-        return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-      case AppThemePreference.light:
-        return false;
-      case AppThemePreference.dark:
-        return true;
-    }
-  }
-
   ThemeProvider() {
     _loadTheme();
   }

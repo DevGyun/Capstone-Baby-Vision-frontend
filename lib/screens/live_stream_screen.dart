@@ -87,9 +87,7 @@ Future<void> _captureFrame() async {
       _showSnack('캡처를 준비하지 못했어요. 잠시 후 다시 시도해 주세요', isError: true);
       return;
     }
-
-    // 디바이스 픽셀 비율 반영 — 고해상도로 저장
-// 디바이스 픽셀 비율 반영 — 고해상도로 저장
+    
     if (!mounted) return;
     final dpr = MediaQuery.of(context).devicePixelRatio;
     final image = await boundary.toImage(pixelRatio: dpr);

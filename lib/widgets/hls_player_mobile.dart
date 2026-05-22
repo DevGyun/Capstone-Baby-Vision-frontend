@@ -93,7 +93,6 @@ if (widget.seekToLiveOnConnect) {
 }
 
 widget.onConnected?.call();
-      widget.onConnected?.call();
     } catch (error) {
       debugPrint('HLS 연결 실패 (시도 ${_retryCount + 1}/$_maxRetries): $error');
       await controller.dispose();
