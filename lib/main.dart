@@ -161,6 +161,7 @@ class EyeCatchApp extends StatelessWidget {
 
     return MaterialApp(
       navigatorKey: appNavigatorKey,
+      debugShowCheckedModeBanner: false,
       title: 'Eye Catch',
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

@@ -292,11 +292,11 @@ Widget build(BuildContext context) {
                 ],
               ),
               // 테스트 알림 FAB — 시스템 네비를 피해서 위로 올림
-              Positioned(
-                bottom: 110 + bottomInset,
-                right: AppSpacing.lg,
-                child: _buildTestNotificationFab(),
-              ),
+              // Positioned(
+              //   bottom: 110 + bottomInset,
+              //   right: AppSpacing.lg,
+              //   child: _buildTestNotificationFab(),
+              // ),
               // 플로팅 네비 — 시스템 네비를 피해서 위로 올림
               Positioned(
                 bottom: AppSpacing.lg + bottomInset,
