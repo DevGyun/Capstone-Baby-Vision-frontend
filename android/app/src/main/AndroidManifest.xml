@@ -88,10 +88,15 @@
             android:value="2" />
     </application>
 
-    <queries>
+<queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- ▼ 추가: 전화 걸기 인텐트 -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
         </intent>
     </queries>
 </manifest>

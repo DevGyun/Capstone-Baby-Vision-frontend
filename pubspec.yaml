@@ -22,7 +22,9 @@ dependencies:
   pointer_interceptor: ^0.10.1+2    # 웹 빌드에서 영상 위 버튼 클릭 보장
   flutter_blue_plus: ^1.32.12       # BLE 페어링 (브릿지 핫스팟→BLE 마이그레이션)
   gal: ^2.3.0 
-  path_provider: ^2.1.4      # 갤러리 저장용
+  path_provider: ^2.1.4
+  url_launcher: ^6.3.0
+            # 119 긴급 전화 걸기      # 갤러리 저장용
 flutter:
   uses-material-design: true
   assets:

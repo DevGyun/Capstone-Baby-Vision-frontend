@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/log_provider.dart';
+import '../services/emergency_call.dart';   // ← 추가
+import '../theme/app_theme.dart';    
 
 class IncidentDetailsScreen extends StatefulWidget {
   final IncidentLog log;
@@ -131,6 +133,36 @@ class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
                       ),
                   ],
                 ],
+              ),
+            ),
+             const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => EmergencyCall.confirmAndDial(context),
+                icon: const Icon(Icons.phone_in_talk, size: 20),
+                label: const Text(
+                  '119 긴급 전화',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.danger,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                '위급 상황 시 즉시 119로 연결됩니다',
+                style: TextStyle(
+                  color: colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
