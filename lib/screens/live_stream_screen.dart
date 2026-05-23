@@ -6,6 +6,7 @@ import '../widgets/hls_player.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:gal/gal.dart';
+import '../widgets/hls_player_mobile.dart';
 
 class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
@@ -27,15 +28,14 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
-  /// 스트림 실제 연결 상태.
   bool _isStreamConnected = false;
   int _retryCount = 0;
-
-  /// 캡처 처리 중 표시
   bool _isCapturing = false;
-
-  /// 영상 영역만 캡처하기 위한 키
   final GlobalKey _captureKey = GlobalKey();
+
+  // ▼ PiP 제어용 — 영상 플레이어 State에 접근
+  final GlobalKey<MobileHlsPlayerState> _playerKey =
+      GlobalKey<MobileHlsPlayerState>();
 
   @override
   void initState() {
@@ -50,11 +50,20 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
     _animationController.dispose();
     super.dispose();
   }
-/// 현재 영상 화면을 캡처해서 폰 갤러리에 저장.
-///
-/// 주의: video_player가 표시하는 영상은 별도 GPU 텍스처일 수 있어서
-/// 기기에 따라 영상 부분이 검은 화면으로 나올 수 있어요.
-/// 안드로이드 9+ 대부분의 기종에서 정상 동작.
+/// PiP 모드 진입. 영상 플레이어 State의 enterPip() 호출.
+Future<void> _enterPip() async {
+  if (!_isStreamConnected) {
+    _showSnack('영상이 연결된 뒤에 사용할 수 있어요', isError: true);
+    return;
+  }
+  try {
+    await _playerKey.currentState?.enterPip();
+  } catch (e) {
+    debugPrint('PiP 실패: $e');
+    _showSnack('이 기기에서는 PiP 기능을 지원하지 않아요', isError: true);
+  }
+}
+
 Future<void> _captureFrame() async {
   if (_isCapturing) return;
   if (!_isStreamConnected) {
@@ -179,8 +188,9 @@ void _showSnack(String message, {required bool isError}) {
 Positioned.fill(
   child: RepaintBoundary(
     key: _captureKey,
-    child: HlsPlayer(
-      streamUrl: widget.streamUrl,
+    child: MobileHlsPlayer(
+      key: _playerKey,                  // ← PiP 제어용 키
+      hlsUrl: widget.streamUrl,
       onConnected: () {
         if (mounted && !_isStreamConnected) {
           setState(() {
@@ -297,8 +307,13 @@ Positioned.fill(
       label: _isCapturing ? '저장 중...' : '캡처',
       onTap: _isCapturing ? null : _captureFrame,
       isProcessing: _isCapturing,
+    ),// ▼ PiP 버튼 (추가)
+    _buildActiveControlBtn(
+      icon: Icons.picture_in_picture_alt,
+      label: '작은 화면',
+      onTap: _isStreamConnected ? _enterPip : null,
     ),
-    // 녹화 — 아직 준비 중
+    // 녹화 — 준비 중
     _buildComingSoonBtn(
       icon: Icons.fiber_manual_record,
       label: '녹화',
