@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 class EmergencyCall {
   EmergencyCall._();
 
+  /// 바로 전화 걸기 (확인 없이).
   static Future<void> dial(
     BuildContext context, {
     String number = '119',
@@ -28,7 +29,9 @@ class EmergencyCall {
       debugPrint('긴급 전화 실패: $e');
       _showError(messenger);
     }
-    /// 확인 다이얼로그를 거쳐 전화 걸기. 오발신 방지용.
+  }
+
+  /// 확인 다이얼로그를 거쳐 전화 걸기. 오발신 방지용.
   static Future<void> confirmAndDial(
     BuildContext context, {
     String number = '119',
@@ -114,7 +117,6 @@ class EmergencyCall {
     if (confirmed == true && context.mounted) {
       await dial(context, number: number);
     }
-  }
   }
 
   static void _showError(ScaffoldMessengerState messenger) {
