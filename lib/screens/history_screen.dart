@@ -474,17 +474,6 @@ Widget build(BuildContext context) {
           children: [
             Stack(
               children: [
-                // 변경 전
-ClipRRect(
-  borderRadius: BorderRadius.circular(AppRadius.md),
-  child: Image.asset(
-    log.imageUrl,
-    height: 160,
-    width: double.infinity,
-    fit: BoxFit.cover,
-  ),
-),
-
 // 변경 후
 ClipRRect(
   borderRadius: BorderRadius.circular(AppRadius.md),

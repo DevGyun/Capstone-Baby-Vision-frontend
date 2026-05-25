@@ -24,6 +24,7 @@ dependencies:
   gal: ^2.3.0 
   path_provider: ^2.1.4
   url_launcher: ^6.3.0
+  share_plus: ^10.1.4
   better_player_enhanced: ^1.0.0    # ← 추가 (네이티브 PiP)
 
 flutter:

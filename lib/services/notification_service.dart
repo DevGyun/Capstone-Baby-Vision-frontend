@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import '../main.dart'; // appNavigatorKey
@@ -93,36 +94,58 @@ class NotificationService {
     );
   }
 
-  Future<void> showUrgentNotification({String? title, String? body}) async {
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      'urgent_alert_channel',
-      '긴급 위험 알림',
-      channelDescription: '위험 구역 침입 등 긴급 상황 발생 시 화면을 깨우고 알림을 보냅니다.',
-      importance: Importance.max,
-      priority: Priority.high,
-      fullScreenIntent: true,
-      enableVibration: true,
-      playSound: true,
-      color: Colors.red,
-    );
+/// 긴급 위험 알림. imagePath가 있으면 감지 사진을 펼쳐 보여줌.
+/// 긴급 위험 알림. imagePath가 있으면 감지 사진을 펼쳐 보여줌.
+Future<void> showUrgentNotification({
+  String? title,
+  String? body,
+  String? imagePath,
+}) async {
+  final hasImage = imagePath != null && File(imagePath).existsSync();
 
-    final NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: const DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-        interruptionLevel: InterruptionLevel.critical,
-      ),
-    );
+  // 안드로이드: 펼쳤을 때 큰 사진
+  final StyleInformation? styleInformation = hasImage
+      ? BigPictureStyleInformation(
+          FilePathAndroidBitmap(imagePath),
+          contentTitle: title,
+          summaryText: body,
+          hideExpandedLargeIcon: true, // 펼치면 우측 작은 썸네일 숨김 (중복 방지)
+        )
+      : null;
 
-    await flutterLocalNotificationsPlugin.show(
-      id: DateTime.now().millisecond,
-      title: title ?? '🚨 위험 구역 침입 감지!',
-      body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
-      notificationDetails: platformDetails,
-      payload: 'alerts',
-    );
-  }
-}
+  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    'urgent_alert_channel',
+    '긴급 위험 알림',
+    channelDescription: '위험 구역 침입 등 긴급 상황 발생 시 화면을 깨우고 알림을 보냅니다.',
+    importance: Importance.max,
+    priority: Priority.high,
+    fullScreenIntent: true,
+    enableVibration: true,
+    playSound: true,
+    color: Colors.red,
+    styleInformation: styleInformation,
+    // 접힌 상태에서도 우측에 작은 썸네일
+    largeIcon: hasImage ? FilePathAndroidBitmap(imagePath) : null,
+  );
+
+  final NotificationDetails platformDetails = NotificationDetails(
+    android: androidDetails,
+    iOS: DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.critical,
+      attachments: hasImage
+          ? [DarwinNotificationAttachment(imagePath)]
+          : null,
+    ),
+  );
+
+  await flutterLocalNotificationsPlugin.show(
+    id: DateTime.now().millisecond,
+    title: title ?? '🚨 위험 구역 침입 감지!',
+    body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
+    notificationDetails: platformDetails,
+    payload: 'alerts',
+  );
+}}

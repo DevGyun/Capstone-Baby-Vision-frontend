@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
@@ -83,7 +87,34 @@ class LogProvider extends ChangeNotifier {
   List<IncidentLog> get logs => _logs;
   bool get isLoading => _isLoading;
 
-  // _authHeaders() 메서드 삭제
+/// 알림 스냅샷을 인증 붙여 임시 파일로 내려받음. 실패하면 null → 사진 없이 푸시.
+Future<String?> _downloadSnapshotToFile(IncidentLog log) async {
+  final url = log.snapshotUrl;
+  if (url == null) return null;
+
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('eyeCatchToken') ?? '';
+
+    final resp = await http.get(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'ngrok-skip-browser-warning': '69420',
+      },
+    ).timeout(const Duration(seconds: 8));
+
+    if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) return null;
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/alert_snapshot_${log.id}.jpg');
+    await file.writeAsBytes(resp.bodyBytes, flush: true);
+    return file.path;
+  } catch (e) {
+    debugPrint('푸시용 스냅샷 다운로드 실패: $e');
+    return null;
+  }
+}
 
 Future<void> fetchAlerts() async {
   _isLoading = true;
@@ -141,22 +172,26 @@ Future<void> _maybePushNewAlerts(List<IncidentLog> latestLogs) async {
   if (fresh.isEmpty) return;
 
   // 너무 많으면 한 번에 합쳐서 표시
-  if (fresh.length == 1) {
-    final log = fresh.first;
-    await NotificationService().showUrgentNotification(
-      title: '🚨 ${log.title}',
-      body: log.description.isEmpty
-          ? '카메라에서 위험이 감지됐어요'
-          : log.description,
-    );
-  } else {
-    // 가장 최근 + "외 N건"
-    final newest = fresh.first; // fetchAlerts가 sent_at desc로 옴
-    await NotificationService().showUrgentNotification(
-      title: '🚨 새 알림 ${fresh.length}건',
-      body: '${newest.title} 외 ${fresh.length - 1}건',
-    );
-  }
+if (fresh.length == 1) {
+  final log = fresh.first;
+  final imagePath = await _downloadSnapshotToFile(log); // ← 추가
+  await NotificationService().showUrgentNotification(
+    title: '🚨 ${log.title}',
+    body: log.description.isEmpty
+        ? '카메라에서 위험이 감지됐어요'
+        : log.description,
+    imagePath: imagePath, // ← 추가
+  );
+} else {
+  // 가장 최근 + "외 N건"
+  final newest = fresh.first; // fetchAlerts가 sent_at desc로 옴
+  final imagePath = await _downloadSnapshotToFile(newest); // ← 추가
+  await NotificationService().showUrgentNotification(
+    title: '🚨 새 알림 ${fresh.length}건',
+    body: '${newest.title} 외 ${fresh.length - 1}건',
+    imagePath: imagePath, // ← 추가
+  );
+}
 
   // 모두 본 것으로 마킹
   for (final log in fresh) {
