@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/log_provider.dart';
 import '../services/emergency_call.dart';   // ← 추가
 import '../theme/app_theme.dart';    
+import '../widgets/snapshot_image.dart';
 
 class IncidentDetailsScreen extends StatefulWidget {
   final IncidentLog log;
@@ -50,16 +51,16 @@ class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
               alignment: Alignment.center,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    log.imageUrl,
-                    width: double.infinity,
-                    height: 220,
-                    fit: BoxFit.cover,
-                    color: Colors.black.withValues(alpha:0.2),
-                    colorBlendMode: BlendMode.darken,
-                  ),
-                ),
+  borderRadius: BorderRadius.circular(24),
+  child: SnapshotImage(
+    snapshotUrl: log.snapshotUrl,
+    width: double.infinity,
+    height: 220,
+    fit: BoxFit.cover,
+    color: Colors.black.withValues(alpha: 0.2),
+    colorBlendMode: BlendMode.darken,
+  ),
+),
                 if (log.isAlert)
                   Container(
                     width: 80, height: 80,

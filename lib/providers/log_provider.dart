@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/alert_seen_storage.dart';
 import '../services/notification_service.dart';
+import '../config.dart';
 
 // 백엔드 GET /alerts 응답에 맞춰 정의
 // 응답 예: {id, message, is_read, sent_at, zone_name, confidence, detected_at}
@@ -14,6 +15,7 @@ class IncidentLog {
   final String? zoneName;
   final double? confidence;
   final DateTime? detectedAt;
+  final String? snapshotPath;   // ← 추가: 스냅샷 파일명 (없으면 null)
 
   IncidentLog({
     required this.id,
@@ -23,6 +25,7 @@ class IncidentLog {
     this.zoneName,
     this.confidence,
     this.detectedAt,
+    this.snapshotPath,          // ← 추가
   });
 
   factory IncidentLog.fromJson(Map<String, dynamic> json) {
@@ -36,7 +39,22 @@ class IncidentLog {
       detectedAt: json['detected_at'] != null
                   ? DateTime.parse(json['detected_at']).toLocal()
                   : null,
+      snapshotPath: _extractFilename(json['snapshot_url'] as String?), // ← 추가
     );
+  }
+
+  /// 백엔드는 snapshot_url을 전체 URL(SERVER_HOST 기반)로 보내요.
+  /// SERVER_HOST 설정이 어긋나도 이미지가 뜨도록, 파일명만 떼어내
+  /// 앱이 아는 baseUrl로 다시 조립해요.
+  static String? _extractFilename(String? rawUrl) {
+    if (rawUrl == null || rawUrl.isEmpty) return null;
+    return rawUrl.split('/').last;
+  }
+
+  /// 인증 붙여서 부를 실제 스냅샷 URL. 없으면 null → placeholder.
+  String? get snapshotUrl {
+    if (snapshotPath == null || snapshotPath!.isEmpty) return null;
+    return '${AppConfig.baseUrl}/alerts/snapshots/$snapshotPath';
   }
 
   // ── UI 호환용 getter (history/main/details 화면에서 사용) ─
@@ -46,7 +64,7 @@ class IncidentLog {
   IconData get icon      => Icons.warning_amber_rounded;
   Color get iconColor    => Colors.redAccent;
   bool get isAlert       => true;
-  String get imageUrl    => 'assets/images/1babyscreen.png';
+  String get imageUrl    => 'assets/images/1babyscreen.png'; // placeholder 폴백용
 
   static String _timeAgo(DateTime dt) {
     final diff = DateTime.now().difference(dt);

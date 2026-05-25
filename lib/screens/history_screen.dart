@@ -5,6 +5,7 @@ import '../providers/log_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common/empty_state_view.dart';
 import 'incident_details_screen.dart';
+import '../widgets/snapshot_image.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -473,15 +474,27 @@ Widget build(BuildContext context) {
           children: [
             Stack(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Image.asset(
-                    log.imageUrl,
-                    height: 160,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                // 변경 전
+ClipRRect(
+  borderRadius: BorderRadius.circular(AppRadius.md),
+  child: Image.asset(
+    log.imageUrl,
+    height: 160,
+    width: double.infinity,
+    fit: BoxFit.cover,
+  ),
+),
+
+// 변경 후
+ClipRRect(
+  borderRadius: BorderRadius.circular(AppRadius.md),
+  child: SnapshotImage(
+    snapshotUrl: log.snapshotUrl,
+    height: 160,
+    width: double.infinity,
+    fit: BoxFit.cover,
+  ),
+),
                 Positioned(
                   top: AppSpacing.sm,
                   left: AppSpacing.sm,
