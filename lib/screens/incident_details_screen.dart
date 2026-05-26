@@ -1,3 +1,9 @@
+import 'dart:io';
+import 'package:gal/gal.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/log_provider.dart';
@@ -15,6 +21,122 @@ class IncidentDetailsScreen extends StatefulWidget {
 }
 
 class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
+  bool _isSaving = false;
+  bool _isSharing = false;
+
+  /// 스냅샷을 인증 붙여 임시 파일로 받음. 저장·공유가 같이 재사용.
+  /// 이미 받아둔 게 있으면 그대로 반환.
+  String? _cachedPath;
+  Future<String?> _ensureSnapshotFile() async {
+    if (_cachedPath != null && File(_cachedPath!).existsSync()) {
+      return _cachedPath;
+    }
+    final url = widget.log.snapshotUrl;
+    if (url == null) return null;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('eyeCatchToken') ?? '';
+      final resp = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'ngrok-skip-browser-warning': '69420',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) return null;
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/eyecatch_alert_${widget.log.id}.jpg');
+      await file.writeAsBytes(resp.bodyBytes, flush: true);
+      _cachedPath = file.path;
+      return file.path;
+    } catch (e) {
+      debugPrint('스냅샷 다운로드 실패: $e');
+      return null;
+    }
+  }
+
+  String get _fileLabel {
+    final dt = widget.log.detectedAt ?? widget.log.sentAt;
+    final zone = widget.log.zoneName ?? '감지';
+    return 'EyeCatch_${zone}_'
+        '${dt.year}${dt.month.toString().padLeft(2, "0")}${dt.day.toString().padLeft(2, "0")}_'
+        '${dt.hour.toString().padLeft(2, "0")}${dt.minute.toString().padLeft(2, "0")}';
+  }
+
+  Future<void> _saveToGallery() async {
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      final path = await _ensureSnapshotFile();
+      if (path == null) {
+        _snack('저장할 사진을 불러오지 못했어요', isError: true);
+        return;
+      }
+
+      final hasAccess = await Gal.hasAccess(toAlbum: true);
+      if (!hasAccess) {
+        final granted = await Gal.requestAccess(toAlbum: true);
+        if (!granted) {
+          _snack('갤러리 권한이 없어요. 설정에서 사진 권한을 허용해 주세요', isError: true);
+          return;
+        }
+      }
+
+      await Gal.putImage(path, album: 'EyeCatch');
+      _snack('갤러리에 저장됐어요 · EyeCatch 앨범', isError: false);
+    } on GalException catch (e) {
+      _snack('저장 실패: ${e.type.message}', isError: true);
+    } catch (e) {
+      _snack('저장 중 오류가 발생했어요', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _shareSnapshot() async {
+    if (_isSharing) return;
+    setState(() => _isSharing = true);
+    try {
+      final path = await _ensureSnapshotFile();
+      if (path == null) {
+        _snack('공유할 사진을 불러오지 못했어요', isError: true);
+        return;
+      }
+      final zone = widget.log.zoneName ?? '카메라';
+      await Share.shareXFiles(
+        [XFile(path, name: '$_fileLabel.jpg', mimeType: 'image/jpeg')],
+        text: '[Eye Catch] $zone에서 위험이 감지됐어요 · ${widget.log.time}',
+      );
+    } catch (e) {
+      _snack('공유 중 오류가 발생했어요', isError: true);
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  void _snack(String msg, {required bool isError}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: isError ? AppColors.danger : AppColors.success,
+              size: 18,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: Text(msg)),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
   @override
   void initState() {
     super.initState();
@@ -137,6 +259,55 @@ class _IncidentDetailsScreenState extends State<IncidentDetailsScreen> {
               ),
             ),
              const SizedBox(height: 24),
+                         if (log.snapshotUrl != null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSaving ? null : _saveToGallery,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(_isSaving ? '저장 중...' : '사진 저장'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm + 2),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isSharing ? null : _shareSnapshot,
+                      icon: _isSharing
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.share_outlined, size: 20),
+                      label: Text(_isSharing ? '공유 중...' : '공유'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
