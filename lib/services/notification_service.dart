@@ -142,7 +142,7 @@ Future<void> showUrgentNotification({
   );
 
   await flutterLocalNotificationsPlugin.show(
-    id: DateTime.now().millisecond,
+    id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
     title: title ?? '🚨 위험 구역 침입 감지!',
     body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
     notificationDetails: platformDetails,
