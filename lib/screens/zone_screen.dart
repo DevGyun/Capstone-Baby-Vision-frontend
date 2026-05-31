@@ -94,7 +94,8 @@ class _EditableZone {
 enum _BackgroundMode { cached, liveCapturing, placeholder }
 
 class ZoneScreen extends StatefulWidget {
-  const ZoneScreen({super.key});
+  final bool isActive;
+  const ZoneScreen({super.key, this.isActive = true});
 
   @override
   State<ZoneScreen> createState() => _ZoneScreenState();
@@ -710,7 +711,7 @@ void _onLiveConnected() {
   /// 배경 모드별 위젯 분기
   Widget _buildBackground(CameraModel? activeCamera) {
     switch (_bgMode) {
-      case _BackgroundMode.cached:
+case _BackgroundMode.cached:
         if (_cachedSnapshot != null) {
           return Image.file(
             _cachedSnapshot!,
@@ -719,11 +720,14 @@ void _onLiveConnected() {
             height: double.infinity,
           );
         }
-        return Container(color: Colors.black);
+        return const _BackgroundPlaceholder();   // ← 검은 화면 대신
 
-      case _BackgroundMode.liveCapturing:
-        if (activeCamera == null || activeCamera.hlsUrl.isEmpty) {
-          return Container(color: Colors.black);
+case _BackgroundMode.liveCapturing:
+        // 구역 탭을 아직 안 봤거나 카메라가 없으면 영상 대신 안내 화면
+        if (!widget.isActive ||
+            activeCamera == null ||
+            activeCamera.hlsUrl.isEmpty) {
+          return const _BackgroundPlaceholder();
         }
         return RepaintBoundary(
           key: _liveCaptureKey,
@@ -735,10 +739,9 @@ void _onLiveConnected() {
           ),
         );
 
-      case _BackgroundMode.placeholder:
-        return Container(color: Colors.black);
-    }
-  }
+case _BackgroundMode.placeholder:
+        return const _BackgroundPlaceholder();
+  }}
 
   Widget _buildBottomControls(List<dynamic> cameras) {
     final cs = Theme.of(context).colorScheme;
@@ -1126,7 +1129,72 @@ class _OverlayButton extends StatelessWidget {
     );
   }
 }
+/// 배경 영상이 아직 안 떠 있을 때 보여주는 안내 화면.
+/// 검은 화면 대신, "탭하면 화면을 불러온다"는 맥락을 전달.
+class _BackgroundPlaceholder extends StatelessWidget {
+  const _BackgroundPlaceholder();
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1A1C24),
+            Color(0xFF0E0F14),
+          ],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.shield_outlined,
+                color: AppColors.accent,
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              '위험구역을 설정해 보세요',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+              child: Text(
+                '카메라 화면을 불러와 그 위에\n위험구역을 그릴 수 있어요',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.6),
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 /// 라이브 캡처 중 안내 배너
 class _CapturingBanner extends StatelessWidget {
   const _CapturingBanner();

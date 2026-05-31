@@ -283,14 +283,14 @@ Widget build(BuildContext context) {
           child: Stack(
             children: [
               IndexedStack(
-                index: _selectedIndex,
-                children: [
-                  _buildMonitoringView(),
-                  const ZoneScreen(),
-                  const HistoryScreen(),
-                  const SettingsScreen(),
-                ],
-              ),
+  index: _selectedIndex,
+  children: [
+    _buildMonitoringView(),
+    ZoneScreen(isActive: _selectedIndex == 1),   // ← const 제거 + isActive 전달
+    const HistoryScreen(),
+    const SettingsScreen(),
+  ],
+),
               // 테스트 알림 FAB — 시스템 네비를 피해서 위로 올림
               Positioned(
                 bottom: 110 + bottomInset,
