@@ -12,18 +12,55 @@ class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
   final String cameraName;
   final String streamUrl;
+  final bool isConnected;          // ← 추가
 
   const LiveStreamScreen({
     super.key,
     required this.cameraId,
     required this.cameraName,
     required this.streamUrl,
+    this.isConnected = true,       // ← 추가
   });
 
   @override
   State<LiveStreamScreen> createState() => _LiveStreamScreenState();
 }
+class _CameraOfflineView extends StatelessWidget {
+  const _CameraOfflineView();
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.videocam_off_outlined,
+                color: Colors.white.withValues(alpha: 0.5), size: 56),
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              '카메라가 꺼져 있어요',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '카메라 전원과 인터넷 연결을 확인해 주세요',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.6),
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class _LiveStreamScreenState extends State<LiveStreamScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
@@ -186,24 +223,26 @@ void _showSnack(String message, {required bool isError}) {
             // 1. 영상 플레이어
             // 1. 영상 플레이어 (캡처를 위해 RepaintBoundary로 감싸기)
 Positioned.fill(
-  child: RepaintBoundary(
-    key: _captureKey,
-    child: MobileHlsPlayer(
-      key: _playerKey,                  // ← PiP 제어용 키
-      hlsUrl: widget.streamUrl,
-      onConnected: () {
-        if (mounted && !_isStreamConnected) {
-          setState(() {
-            _isStreamConnected = true;
-            _retryCount = 0;
-          });
-        }
-      },
-      onRetry: () {
-        if (mounted) setState(() => _retryCount++);
-      },
-    ),
-  ),
+  child: widget.isConnected
+      ? RepaintBoundary(
+          key: _captureKey,
+          child: MobileHlsPlayer(
+            key: _playerKey,
+            hlsUrl: widget.streamUrl,
+            onConnected: () {
+              if (mounted && !_isStreamConnected) {
+                setState(() {
+                  _isStreamConnected = true;
+                  _retryCount = 0;
+                });
+              }
+            },
+            onRetry: () {
+              if (mounted) setState(() => _retryCount++);
+            },
+          ),
+        )
+      : const _CameraOfflineView(),   // ← 오프라인이면 영상 대신 안내
 ),
 
             // 2. 상단 바 (글래스모피즘) - PointerInterceptor 적용

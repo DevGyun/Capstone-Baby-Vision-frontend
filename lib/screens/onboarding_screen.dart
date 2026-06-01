@@ -94,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                   _buildPage(
                     title: '위험 상황을 즉시\n알려드립니다',
-                    subtitle: '아이가 위험 구역에 진입하면\n즉각적인 알림과 경고 음성을 송출합니다.',
+                    subtitle: '아이가 위험 구역에 진입하면\n즉각적인 알림을 보내드립니다.',
                     imagePath: 'assets/images/onboarding3.png',
                     fallbackIcon: Icons.notifications_active_rounded,
                     blobColor: AppColors.danger,

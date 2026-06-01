@@ -646,6 +646,7 @@ Widget build(BuildContext context) {
             cameraId: cam.id.toString(),
             cameraName: cam.name,
             streamUrl: cam.hlsUrl,
+            isConnected: cam.isConnected,   // ← 추가
           ),
         ),
       ),

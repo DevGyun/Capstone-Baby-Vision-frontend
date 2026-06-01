@@ -708,10 +708,15 @@ void _onLiveConnected() {
     );
   }
 
-  /// 배경 모드별 위젯 분기
+/// 배경 모드별 위젯 분기
   Widget _buildBackground(CameraModel? activeCamera) {
+    // 카메라가 아예 없으면 배경은 비우고, "카메라 없음" 안내(위 레이어)에 맡김
+    if (activeCamera == null) {
+      return Container(color: Colors.black);
+    }
+
     switch (_bgMode) {
-case _BackgroundMode.cached:
+      case _BackgroundMode.cached:
         if (_cachedSnapshot != null) {
           return Image.file(
             _cachedSnapshot!,
@@ -720,13 +725,12 @@ case _BackgroundMode.cached:
             height: double.infinity,
           );
         }
-        return const _BackgroundPlaceholder();   // ← 검은 화면 대신
+        return const _BackgroundPlaceholder();
 
-case _BackgroundMode.liveCapturing:
-        // 구역 탭을 아직 안 봤거나 카메라가 없으면 영상 대신 안내 화면
+      case _BackgroundMode.liveCapturing:
         if (!widget.isActive ||
-            activeCamera == null ||
-            activeCamera.hlsUrl.isEmpty) {
+            activeCamera.hlsUrl.isEmpty ||
+            !activeCamera.isConnected) {
           return const _BackgroundPlaceholder();
         }
         return RepaintBoundary(
@@ -739,9 +743,10 @@ case _BackgroundMode.liveCapturing:
           ),
         );
 
-case _BackgroundMode.placeholder:
+      case _BackgroundMode.placeholder:
         return const _BackgroundPlaceholder();
-  }}
+    }
+  }
 
   Widget _buildBottomControls(List<dynamic> cameras) {
     final cs = Theme.of(context).colorScheme;
