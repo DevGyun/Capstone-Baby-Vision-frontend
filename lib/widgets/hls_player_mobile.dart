@@ -1,11 +1,11 @@
-import 'package:better_player_enhanced/better_player.dart';
 import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
 
 Widget getPlatformPlayer(
   String hlsUrl, {
   VoidCallback? onConnected,
   VoidCallback? onRetry,
-  bool seekToLiveOnConnect = false,   // 인터페이스 호환용 (better_player는 자체 처리)
+  bool seekToLiveOnConnect = false,
 }) {
   return MobileHlsPlayer(
     hlsUrl: hlsUrl,
@@ -30,10 +30,8 @@ class MobileHlsPlayer extends StatefulWidget {
   State<MobileHlsPlayer> createState() => MobileHlsPlayerState();
 }
 
-// PiP 제어를 위해 외부에서 접근 가능하게 State를 public으로
 class MobileHlsPlayerState extends State<MobileHlsPlayer> {
-  BetterPlayerController? _controller;
-  final GlobalKey _betterPlayerKey = GlobalKey();
+  VideoPlayerController? _controller;
   bool _connectedNotified = false;
   bool _hasGivenUp = false;
   int _retryCount = 0;
@@ -46,53 +44,33 @@ class MobileHlsPlayerState extends State<MobileHlsPlayer> {
     _setup();
   }
 
-  void _setup() {
-    final dataSource = BetterPlayerDataSource(
-      BetterPlayerDataSourceType.network,
-      widget.hlsUrl,
-      liveStream: true,                 // ★ 라이브 스트림 — 항상 엣지 재생
-      videoFormat: BetterPlayerVideoFormat.hls,
-      headers: const {
-        'ngrok-skip-browser-warning': '69420',
-      },
+  Future<void> _setup() async {
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(widget.hlsUrl),
+      httpHeaders: const {'ngrok-skip-browser-warning': '69420'},
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
     );
 
-    final config = BetterPlayerConfiguration(
-      autoPlay: true,
-      looping: false,
-      aspectRatio: 16 / 9,
-      fit: BoxFit.contain,
-      handleLifecycle: false,           // 우리가 직접 라이프사이클 관리
-      // ★ PiP 활성화
-      controlsConfiguration: const BetterPlayerControlsConfiguration(
-        enablePip: true,
-        showControls: false,            // 자체 컨트롤 숨김 (우리 UI 사용)
-      ),
-      errorBuilder: (context, errorMessage) => _buildError(),
-    );
+    _controller = controller;
 
-    final controller = BetterPlayerController(config);
-    controller.setupDataSource(dataSource);
-
-    controller.addEventsListener((event) {
-      switch (event.betterPlayerEventType) {
-        case BetterPlayerEventType.initialized:
-        case BetterPlayerEventType.play:
-          if (!_connectedNotified && mounted) {
-            _connectedNotified = true;
-            _retryCount = 0;
-            widget.onConnected?.call();
-          }
-          break;
-        case BetterPlayerEventType.exception:
-          _handleError();
-          break;
-        default:
-          break;
+    try {
+      await controller.initialize();
+      if (!mounted) {
+        controller.dispose();
+        return;
       }
-    });
+      await controller.play();
+      await controller.setLooping(false);
 
-    setState(() => _controller = controller);
+      if (!_connectedNotified) {
+        _connectedNotified = true;
+        _retryCount = 0;
+        widget.onConnected?.call();
+      }
+      setState(() {});
+    } catch (e) {
+      _handleError();
+    }
   }
 
   void _handleError() {
@@ -105,24 +83,21 @@ class MobileHlsPlayerState extends State<MobileHlsPlayer> {
       return;
     }
 
-    // 5초 후 데이터소스 다시 시도
-    Future.delayed(const Duration(seconds: 5), () {
+    Future.delayed(const Duration(seconds: 5), () async {
       if (!mounted || _hasGivenUp) return;
-      try {
-        _controller?.retryDataSource();
-      } catch (_) {}
+      await _controller?.dispose();
+      _controller = null;
+      _connectedNotified = false;
+      await _setup();
     });
   }
 
-Future<void> enterPip() async {
-  final controller = _controller;
-  if (controller == null) {
-    throw Exception('플레이어가 아직 준비되지 않았어요');
-  }
-  await controller.enablePictureInPicture(_betterPlayerKey);
-}
+  bool get isInitialized => _controller?.value.isInitialized ?? false;
 
-  bool get isInitialized => _controller?.isVideoInitialized() ?? false;
+  /// PiP 제거됨 — 호환용 빈 메서드 (live_stream_screen에서 호출 제거 권장)
+  Future<void> enterPip() async {
+    throw Exception('PiP는 더 이상 지원하지 않아요');
+  }
 
   @override
   void dispose() {
@@ -134,17 +109,25 @@ Future<void> enterPip() async {
   Widget build(BuildContext context) {
     if (_hasGivenUp) return _buildGaveUp();
 
-    if (_controller == null) {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) {
       return _buildLoading('카메라에 연결 중...');
     }
 
+    // 에러 상태 감지
+    if (c.value.hasError) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleError());
+    }
+
     return Container(
-  color: Colors.black,
-  child: BetterPlayer(
-    key: _betterPlayerKey,        // ← 추가
-    controller: _controller!,
-  ),
-);
+      color: Colors.black,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+          child: VideoPlayer(c),
+        ),
+      ),
+    );
   }
 
   Widget _buildLoading(String msg) => Container(
@@ -165,8 +148,6 @@ Future<void> enterPip() async {
           ),
         ),
       );
-
-  Widget _buildError() => Container(color: Colors.black);
 
   Widget _buildGaveUp() => Container(
         color: Colors.black,

@@ -346,13 +346,7 @@ Positioned.fill(
       label: _isCapturing ? '저장 중...' : '캡처',
       onTap: _isCapturing ? null : _captureFrame,
       isProcessing: _isCapturing,
-    ),// ▼ PiP 버튼 (추가)
-    _buildActiveControlBtn(
-      icon: Icons.picture_in_picture_alt,
-      label: '작은 화면',
-      onTap: _isStreamConnected ? _enterPip : null,
     ),
-    // 녹화 — 준비 중
     _buildComingSoonBtn(
       icon: Icons.fiber_manual_record,
       label: '녹화',
