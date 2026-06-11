@@ -195,14 +195,18 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
       _captureScheduled = false;
     });
 
-    try {
+try {
       // 1) 캐시된 배경 스냅샷 확인
       final cached = await CameraSnapshotStorage.load(cameraId);
+      if (!mounted) return;
 
       // 2) 위험구역 + 로컬 설정
       final localSettings = await ZoneSettingsStorage.loadAll();
+      if (!mounted) return;
+
       final response =
           await ApiClient.request('GET', '/danger-zones/$cameraId');
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -300,21 +304,11 @@ void _onLiveConnected() {
 
 Future<void> _refreshBackground() async {
     if (_currentLoadedCameraId == null) return;
-
-    setState(() => _isLoading = true);   // 잠깐 로딩 표시
-
-    // 최신 알림을 서버에서 다시 받아옴
-    await context.read<LogProvider>().fetchAlerts();
-    if (!mounted) return;
-
-    final snapshotUrl = context.read<LogProvider>().latestSnapshotUrl();
-
+    // 캐시를 비우고 라이브를 다시 띄워 새 프레임을 캡처
     setState(() {
-      _isLoading = false;
-      _bgSnapshotUrl = snapshotUrl;
-      _bgMode = snapshotUrl != null
-          ? _BackgroundMode.snapshot
-          : _BackgroundMode.placeholder;
+      _cachedSnapshot = null;
+      _captureScheduled = false;
+      _bgMode = _BackgroundMode.liveCapturing;
     });
   }
 
