@@ -15,6 +15,16 @@ class NotificationService {
   String? _launchPayload;
   String? get launchPayload => _launchPayload;
 
+  /// 알림 탭으로 열어야 할 alert id. 메인 화면이 뜬 뒤 꺼내서 상세 화면을 염.
+  int? _pendingAlertId;
+
+  /// 저장된 alert id를 한 번 꺼내고 비움. (메인 화면에서 호출)
+  int? consumePendingAlertId() {
+    final id = _pendingAlertId;
+    _pendingAlertId = null;
+    return id;
+  }
+
   Future<void> init() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -51,6 +61,17 @@ class NotificationService {
   void _navigateFromNotification(String? payload) {
     final navigator = appNavigatorKey.currentState;
     if (navigator == null) return;
+
+    // 특정 알림이면 id를 저장해뒀다가 메인 화면이 뜬 뒤 상세 화면을 염
+    if (payload != null && payload.startsWith('alert:')) {
+      final idStr = payload.substring('alert:'.length);
+      final alertId = int.tryParse(idStr);
+      if (alertId != null) {
+        _pendingAlertId = alertId;
+      }
+    }
+
+    // 메인으로 이동 (스택 정리). 저장된 alertId는 메인 화면이 처리.
     navigator.pushNamedAndRemoveUntil('/main', (_) => false);
   }
 
@@ -94,58 +115,60 @@ class NotificationService {
     );
   }
 
-/// 긴급 위험 알림. imagePath가 있으면 감지 사진을 펼쳐 보여줌.
-/// 긴급 위험 알림. imagePath가 있으면 감지 사진을 펼쳐 보여줌.
-Future<void> showUrgentNotification({
-  String? title,
-  String? body,
-  String? imagePath,
-}) async {
-  final hasImage = imagePath != null && File(imagePath).existsSync();
+  /// 긴급 위험 알림. imagePath가 있으면 감지 사진을 펼쳐 보여줌.
+  /// alertId가 있으면 탭 시 해당 알림 상세 화면으로 바로 이동.
+  Future<void> showUrgentNotification({
+    String? title,
+    String? body,
+    String? imagePath,
+    int? alertId,
+  }) async {
+    final hasImage = imagePath != null && File(imagePath).existsSync();
 
-  // 안드로이드: 펼쳤을 때 큰 사진
-  final StyleInformation? styleInformation = hasImage
-      ? BigPictureStyleInformation(
-          FilePathAndroidBitmap(imagePath),
-          contentTitle: title,
-          summaryText: body,
-          hideExpandedLargeIcon: true, // 펼치면 우측 작은 썸네일 숨김 (중복 방지)
-        )
-      : null;
+    // 안드로이드: 펼쳤을 때 큰 사진
+    final StyleInformation? styleInformation = hasImage
+        ? BigPictureStyleInformation(
+            FilePathAndroidBitmap(imagePath),
+            contentTitle: title,
+            summaryText: body,
+            hideExpandedLargeIcon: true,
+          )
+        : null;
 
-  final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-    'urgent_alert_channel',
-    '긴급 위험 알림',
-    channelDescription: '위험 구역 침입 등 긴급 상황 발생 시 화면을 깨우고 알림을 보냅니다.',
-    importance: Importance.max,
-    priority: Priority.high,
-    fullScreenIntent: true,
-    enableVibration: true,
-    playSound: true,
-    color: Colors.red,
-    styleInformation: styleInformation,
-    // 접힌 상태에서도 우측에 작은 썸네일
-    largeIcon: hasImage ? FilePathAndroidBitmap(imagePath) : null,
-  );
+    final AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      'urgent_alert_channel',
+      '긴급 위험 알림',
+      channelDescription: '위험 구역 침입 등 긴급 상황 발생 시 화면을 깨우고 알림을 보냅니다.',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true,
+      enableVibration: true,
+      playSound: true,
+      color: Colors.red,
+      styleInformation: styleInformation,
+      largeIcon: hasImage ? FilePathAndroidBitmap(imagePath) : null,
+    );
 
-  final NotificationDetails platformDetails = NotificationDetails(
-    android: androidDetails,
-    iOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-      interruptionLevel: InterruptionLevel.critical,
-      attachments: hasImage
-          ? [DarwinNotificationAttachment(imagePath)]
-          : null,
-    ),
-  );
+    final NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.critical,
+        attachments: hasImage
+            ? [DarwinNotificationAttachment(imagePath)]
+            : null,
+      ),
+    );
 
-  await flutterLocalNotificationsPlugin.show(
-    id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-    title: title ?? '🚨 위험 구역 침입 감지!',
-    body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
-    notificationDetails: platformDetails,
-    payload: 'alerts',
-  );
-}}
+    await flutterLocalNotificationsPlugin.show(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title ?? '🚨 위험 구역 침입 감지!',
+      body: body ?? '아이가 주방 가스레인지 구역에 접근했습니다. 즉시 확인하세요.',
+      notificationDetails: platformDetails,
+      payload: alertId != null ? 'alert:$alertId' : 'alerts',
+    );
+  }
+}

@@ -47,10 +47,27 @@ void initState() {
   // 라이프사이클 감지 등록
   WidgetsBinding.instance.addObserver(this);
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!mounted) return;
-    context.read<CameraProvider>().fetchCameras();
-    context.read<LogProvider>().fetchAlerts();
+    await context.read<CameraProvider>().fetchCameras();
+    await context.read<LogProvider>().fetchAlerts();
+
+    // 알림 탭으로 들어왔으면 해당 알림 상세 화면 열기
+    final alertId = NotificationService().consumePendingAlertId();
+    if (alertId != null && mounted) {
+      final logs = context.read<LogProvider>().logs;
+      final matches = logs.where((l) => l.id == alertId);
+      final log = matches.isNotEmpty ? matches.first : null;
+      if (log != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => IncidentDetailsScreen(log: log)),
+        );
+      } else {
+        // 로그를 못 찾으면 내역 탭으로라도 이동
+        setState(() => _selectedIndex = 2);
+      }
+    }
   });
 
   _startPolling();
@@ -69,7 +86,7 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
 
   switch (state) {
     case AppLifecycleState.resumed:
-      // 포그라운드 복귀 — 한 번 즉시 갱신 + 폴링 재개
+      // 포그라운드 복귀 — 즉시 한 번 갱신하고 폴링 유지
       if (mounted) {
         context.read<CameraProvider>().fetchCameras();
         context.read<LogProvider>().fetchAlerts();
@@ -78,9 +95,11 @@ void didChangeAppLifecycleState(AppLifecycleState state) {
       break;
     case AppLifecycleState.paused:
     case AppLifecycleState.inactive:
-    case AppLifecycleState.detached:
     case AppLifecycleState.hidden:
-      // 백그라운드 / 화면 꺼짐 — 폴링 중단해서 데이터 절약
+      // 백그라운드/화면 꺼짐 — 폴링 유지해서 알림 계속 받음
+      break;
+    case AppLifecycleState.detached:
+      // 앱이 실제로 종료될 때만 타이머 정리
       _stopPolling();
       break;
   }

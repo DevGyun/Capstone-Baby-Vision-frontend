@@ -235,11 +235,14 @@ class _ZoneScreenState extends State<ZoneScreen> with WidgetsBindingObserver {
         setState(() => _isLoading = false);
         _showSnack('위험구역을 불러오지 못했어요', isError: true);
       }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnack('네트워크 오류로 구역을 불러오지 못했어요', isError: true);
-    }
-  }
+  } catch (e, stack) {
+      debugPrint('구역 로드 예외: $e');
+      debugPrint('$stack');
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showSnack('네트워크 오류로 구역을 불러오지 못했어요', isError: true);
+      }
+    }}
 
   // ─────────────────────────────────────────────
   //   배경 캡처 (라이브 영상 → 정적 이미지)
@@ -295,13 +298,23 @@ void _onLiveConnected() {
     }
   }
 
-  /// 사용자가 "배경 새로고침" 누르면 라이브 영상 다시 띄움
-  void _refreshBackground() {
+Future<void> _refreshBackground() async {
     if (_currentLoadedCameraId == null) return;
+
+    setState(() => _isLoading = true);   // 잠깐 로딩 표시
+
+    // 최신 알림을 서버에서 다시 받아옴
+    await context.read<LogProvider>().fetchAlerts();
+    if (!mounted) return;
+
+    final snapshotUrl = context.read<LogProvider>().latestSnapshotUrl();
+
     setState(() {
-      _cachedSnapshot = null;
-      _bgMode = _BackgroundMode.liveCapturing;
-      _captureScheduled = false;
+      _isLoading = false;
+      _bgSnapshotUrl = snapshotUrl;
+      _bgMode = snapshotUrl != null
+          ? _BackgroundMode.snapshot
+          : _BackgroundMode.placeholder;
     });
   }
 
@@ -509,7 +522,7 @@ void _onLiveConnected() {
   // ─────────────────────────────────────────────
   //   build
   // ─────────────────────────────────────────────
-  @override
+@override
   Widget build(BuildContext context) {
     final cameras = context.watch<CameraProvider>().cameras;
 
@@ -525,83 +538,117 @@ void _onLiveConnected() {
       });
     }
 
-    return SafeArea(
-      child: Column(
-        children: [
-          if (cameras.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: List.generate(cameras.length, (index) {
-                    final isSelected = _selectedCameraIndex == index;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                      child: _CameraTab(
-                        name: cameras[index].name,
-                        isSelected: isSelected,
-                        onTap: () {
-                          if (_selectedCameraIndex == index) return;
-                          setState(() {
-                            _selectedCameraIndex = index;
-                            _currentLoadedCameraId = null;
-                          });
-                          _loadZones(cameras[index].id);
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),   // ← 항상 스크롤 허용
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight:
+                  screenHeight - MediaQuery.of(context).padding.vertical,
+            ),
+            child: Column(
+              children: [
+                if (cameras.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: List.generate(cameras.length, (index) {
+                          final isSelected = _selectedCameraIndex == index;
+                          return Padding(
+                            padding:
+                                const EdgeInsets.only(right: AppSpacing.sm),
+                            child: _CameraTab(
+                              name: cameras[index].name,
+                              isSelected: isSelected,
+                              onTap: () {
+                                if (_selectedCameraIndex == index) return;
+                                setState(() {
+                                  _selectedCameraIndex = index;
+                                  _currentLoadedCameraId = null;
+                                });
+                                _loadZones(cameras[index].id);
+                              },
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+
+                // 캔버스 — 키보드 뜨면 작게
+                SizedBox(
+                  height: 360,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final newSize = Size(
+                              constraints.maxWidth, constraints.maxHeight);
+                          if (_canvasSize != newSize) {
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) {
+                              if (mounted) {
+                                setState(() => _canvasSize = newSize);
+                              }
+                            });
+                          }
+                          final activeCam = cameras.isNotEmpty
+                              ? cameras[_selectedCameraIndex.clamp(
+                                  0, cameras.length - 1)]
+                              : null;
+                          return _buildCanvas(
+                              newSize, cameras.isNotEmpty, activeCam);
                         },
                       ),
-                    );
-                  }),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final newSize =
-                        Size(constraints.maxWidth, constraints.maxHeight);
-                    if (_canvasSize != newSize) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) setState(() => _canvasSize = newSize);
-                      });
-                    }
-                    final activeCam = cameras.isNotEmpty
-                        ? cameras[_selectedCameraIndex.clamp(
-                            0, cameras.length - 1)]
-                        : null;
-                    return _buildCanvas(newSize, cameras.isNotEmpty, activeCam);
-                  },
+
+                // 하단 컨트롤 (스크롤 가능)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(AppRadius.lg)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: _buildBottomControls(cameras),
+                  ),
                 ),
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppRadius.lg)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha:0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, -5),
+
+                SizedBox(
+                  height: keyboardOpen
+                      ? MediaQuery.of(context).viewInsets.bottom
+                      : 60 + MediaQuery.of(context).padding.bottom,
                 ),
               ],
             ),
-            child: _buildBottomControls(cameras),
           ),
-          SizedBox(height: 60 + MediaQuery.of(context).padding.bottom),
-        ],
+        ),
       ),
     );
   }
@@ -681,15 +728,6 @@ void _onLiveConnected() {
             child: _CapturingBanner(),
           ),
 
-        // ── 점 개수 표시 ──
-        if (_activeZoneIndex != null && !_isLoading)
-          Positioned(
-            top: AppSpacing.md + 56,
-            left: AppSpacing.md,
-            child: _ActivePointsChip(
-                count: _zones[_activeZoneIndex!].points.length),
-          ),
-
         // ── 카메라 없음 ──
         if (!hasCameras && !_isLoading)
           const Center(
@@ -757,16 +795,24 @@ void _onLiveConnected() {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Column(
+                    Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '구역 이름',
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '구역 이름',
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  _ActivePointsChip(
+                    count: _zones[_activeZoneIndex!].points.length,
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(

@@ -288,7 +288,7 @@ class SettingsScreen extends StatelessWidget {
             _buildToggleTile(
               context,
               '아이 활동 알림',
-              '위험 구역 접근 및 울음소리 감지 시 즉시 알림',
+              '위험 구역 접근시 즉시 알림',
               Icons.notifications_active,
               settings.isAlertOn,
               (val) => context.read<SettingsProvider>().toggleAlert(val),

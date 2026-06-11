@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:gal/gal.dart';
 import '../widgets/hls_player_mobile.dart';
+import 'dart:async';
 
 class LiveStreamScreen extends StatefulWidget {
   final String cameraId;
@@ -64,7 +65,8 @@ class _CameraOfflineView extends StatelessWidget {
 class _LiveStreamScreenState extends State<LiveStreamScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-
+  bool _controlsVisible = true;        // 컨트롤 표시 여부
+  Timer? _hideTimer;                   // 자동 숨김 타이머
   bool _isStreamConnected = false;
   int _retryCount = 0;
   bool _isCapturing = false;
@@ -73,7 +75,25 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
   // ▼ PiP 제어용 — 영상 플레이어 State에 접근
   final GlobalKey<MobileHlsPlayerState> _playerKey =
       GlobalKey<MobileHlsPlayerState>();
+/// 화면 탭 시 컨트롤 토글. 보이면 숨기고, 숨겨졌으면 보이게.
+  void _toggleControls() {
+    setState(() => _controlsVisible = !_controlsVisible);
+    if (_controlsVisible) {
+      _scheduleHide();   // 다시 떴으니 몇 초 후 자동 숨김 예약
+    } else {
+      _hideTimer?.cancel();
+    }
+  }
 
+  /// 일정 시간 후 컨트롤 자동 숨김 (영상 연결됐을 때만).
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted && _isStreamConnected) {
+        setState(() => _controlsVisible = false);
+      }
+    });
+  }
   @override
   void initState() {
     super.initState();
@@ -82,24 +102,12 @@ class _LiveStreamScreenState extends State<LiveStreamScreen>
         ..repeat(reverse: true);
   }
 
-  @override
+@override
   void dispose() {
+    _hideTimer?.cancel();        // ← 추가
     _animationController.dispose();
     super.dispose();
   }
-/// PiP 모드 진입. 영상 플레이어 State의 enterPip() 호출.
-Future<void> _enterPip() async {
-  if (!_isStreamConnected) {
-    _showSnack('영상이 연결된 뒤에 사용할 수 있어요', isError: true);
-    return;
-  }
-  try {
-    await _playerKey.currentState?.enterPip();
-  } catch (e) {
-    debugPrint('PiP 실패: $e');
-    _showSnack('이 기기에서는 PiP 기능을 지원하지 않아요', isError: true);
-  }
-}
 
 Future<void> _captureFrame() async {
   if (_isCapturing) return;
@@ -213,158 +221,174 @@ void _showSnack(String message, {required bool isError}) {
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: Stack(
-          children: [
-            // 1. 영상 플레이어
-            // 1. 영상 플레이어 (캡처를 위해 RepaintBoundary로 감싸기)
-Positioned.fill(
-  child: widget.isConnected
-      ? RepaintBoundary(
-          key: _captureKey,
-          child: MobileHlsPlayer(
-            key: _playerKey,
-            hlsUrl: widget.streamUrl,
-            onConnected: () {
-              if (mounted && !_isStreamConnected) {
-                setState(() {
-                  _isStreamConnected = true;
-                  _retryCount = 0;
-                });
-              }
-            },
-            onRetry: () {
-              if (mounted) setState(() => _retryCount++);
-            },
-          ),
-        )
-      : const _CameraOfflineView(),   // ← 오프라인이면 영상 대신 안내
-),
+        child: GestureDetector(
+          onTap: _toggleControls,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            children: [
+              // 1. 영상 플레이어 (캡처를 위해 RepaintBoundary로 감싸기)
+              Positioned.fill(
+                child: widget.isConnected
+                    ? RepaintBoundary(
+                        key: _captureKey,
+                        child: MobileHlsPlayer(
+                          key: _playerKey,
+                          hlsUrl: widget.streamUrl,
+                          onConnected: () {
+                            if (mounted && !_isStreamConnected) {
+                              setState(() {
+                                _isStreamConnected = true;
+                                _retryCount = 0;
+                              });
+                              _scheduleHide();
+                            }
+                          },
+                          onRetry: () {
+                            if (mounted) setState(() => _retryCount++);
+                          },
+                        ),
+                      )
+                    : const _CameraOfflineView(),
+              ),
 
-            // 2. 상단 바 (글래스모피즘) - PointerInterceptor 적용
-            Positioned(
-              top: AppSpacing.sm,
-              left: AppSpacing.sm,
-              right: AppSpacing.sm,
-              child: PointerInterceptor(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-                      decoration:
-                          BoxDecoration(color: Colors.black.withValues(alpha:0.4)),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_ios_new,
-                                color: Colors.white, size: 20),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          Expanded(
-                            child: Text(
-                              widget.cameraName,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16),
+              // 2. 상단 바
+              Positioned(
+                top: AppSpacing.sm,
+                left: AppSpacing.sm,
+                right: AppSpacing.sm,
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: PointerInterceptor(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: AppSpacing.xs),
+                            decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.4)),
+                            child: Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.arrow_back_ios_new,
+                                      color: Colors.white, size: 20),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    widget.cameraName,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    FadeTransition(
+                                      opacity: _animationController,
+                                      child: Icon(
+                                        Icons.circle,
+                                        color: _isStreamConnected
+                                            ? AppColors.danger
+                                            : AppColors.warning,
+                                        size: 10,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _isStreamConnected ? 'LIVE' : '연결 중',
+                                      style: TextStyle(
+                                        color: _isStreamConnected
+                                            ? AppColors.danger
+                                            : AppColors.warning,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                          // LIVE 인디케이터 — 연결 상태에 따라 색/문구 다르게
-                          Row(
-                            children: [
-                              FadeTransition(
-                                opacity: _animationController,
-                                child: Icon(
-                                  Icons.circle,
-                                  color: _isStreamConnected
-                                      ? AppColors.danger
-                                      : AppColors.warning,
-                                  size: 10,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _isStreamConnected ? 'LIVE' : '연결 중',
-                                style: TextStyle(
-                                  color: _isStreamConnected
-                                      ? AppColors.danger
-                                      : AppColors.warning,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
 
-            // 3. 연결 중 안내 배너
-            if (!_isStreamConnected)
+              // 3. 연결 중 안내 배너
+              if (!_isStreamConnected)
+                Positioned(
+                  top: 70,
+                  left: AppSpacing.lg,
+                  right: AppSpacing.lg,
+                  child: _buildConnectingBanner(),
+                ),
+
+              // 4. 하단 컨트롤 패널
               Positioned(
-                top: 70,
+                bottom: AppSpacing.xl,
                 left: AppSpacing.lg,
                 right: AppSpacing.lg,
-                child: _buildConnectingBanner(),
-              ),
-
-            // 4. 하단 컨트롤 패널 - PointerInterceptor 적용
-            Positioned(
-              bottom: AppSpacing.xl,
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              child: PointerInterceptor(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                    child: Container(
-                      padding:
-                          const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                      decoration:
-                          BoxDecoration(color: Colors.black.withValues(alpha:0.5)),
-                      child: Row(
-  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  children: [
-    // 캡처 — 활성화됨!
-    _buildActiveControlBtn(
-      icon: _isCapturing
-          ? Icons.hourglass_top
-          : Icons.camera_alt_outlined,
-      label: _isCapturing ? '저장 중...' : '캡처',
-      onTap: _isCapturing ? null : _captureFrame,
-      isProcessing: _isCapturing,
-    ),
-    _buildComingSoonBtn(
-      icon: Icons.fiber_manual_record,
-      label: '녹화',
-      onTap: () => _showComingSoon('녹화'),
-    ),
-  ],
-),
+                child: AnimatedOpacity(
+                  opacity: _controlsVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 250),
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: PointerInterceptor(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: AppSpacing.md),
+                            decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.5)),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildActiveControlBtn(
+                                  icon: _isCapturing
+                                      ? Icons.hourglass_top
+                                      : Icons.camera_alt_outlined,
+                                  label: _isCapturing ? '저장 중...' : '캡처',
+                                  onTap: _isCapturing ? null : _captureFrame,
+                                  isProcessing: _isCapturing,
+                                ),
+                                _buildComingSoonBtn(
+                                  icon: Icons.fiber_manual_record,
+                                  label: '녹화',
+                                  onTap: () => _showComingSoon('녹화'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
-
   /// 스트림 연결 안내 배너.
   Widget _buildConnectingBanner() {
     return ClipRRect(

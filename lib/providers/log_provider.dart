@@ -172,26 +172,28 @@ Future<void> _maybePushNewAlerts(List<IncidentLog> latestLogs) async {
   if (fresh.isEmpty) return;
 
   // 너무 많으면 한 번에 합쳐서 표시
-if (fresh.length == 1) {
-  final log = fresh.first;
-  final imagePath = await _downloadSnapshotToFile(log); // ← 추가
-  await NotificationService().showUrgentNotification(
-    title: '🚨 ${log.title}',
-    body: log.description.isEmpty
-        ? '카메라에서 위험이 감지됐어요'
-        : log.description,
-    imagePath: imagePath, // ← 추가
-  );
-} else {
-  // 가장 최근 + "외 N건"
-  final newest = fresh.first; // fetchAlerts가 sent_at desc로 옴
-  final imagePath = await _downloadSnapshotToFile(newest); // ← 추가
-  await NotificationService().showUrgentNotification(
-    title: '🚨 새 알림 ${fresh.length}건',
-    body: '${newest.title} 외 ${fresh.length - 1}건',
-    imagePath: imagePath, // ← 추가
-  );
-}
+  if (fresh.length == 1) {
+    final log = fresh.first;
+    final imagePath = await _downloadSnapshotToFile(log);
+    await NotificationService().showUrgentNotification(
+      title: '🚨 ${log.title}',
+      body: log.description.isEmpty
+          ? '카메라에서 위험이 감지됐어요'
+          : log.description,
+      imagePath: imagePath,
+      alertId: log.id, // ← 탭 시 이 알림 상세로 이동
+    );
+  } else {
+    // 가장 최근 + "외 N건"
+    final newest = fresh.first; // fetchAlerts가 sent_at desc로 옴
+    final imagePath = await _downloadSnapshotToFile(newest);
+    await NotificationService().showUrgentNotification(
+      title: '🚨 새 알림 ${fresh.length}건',
+      body: '${newest.title} 외 ${fresh.length - 1}건',
+      imagePath: imagePath,
+      alertId: newest.id, // ← 탭 시 가장 최근 알림 상세로 이동
+    );
+  }
 
   // 모두 본 것으로 마킹
   for (final log in fresh) {
